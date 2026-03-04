@@ -1,0 +1,32 @@
+# SpotifAI — Python dependencies
+# Install with: pip install -r requirements.txt
+
+# Web framework
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# Spotify API wrapper
+spotipy==2.24.0
+
+# Anthropic / Claude API
+anthropic==0.42.0
+
+# Database
+duckdb==1.1.3
+
+# Data validation
+pydantic==2.10.4
+pydantic-settings==2.7.0
+
+# Environment variables
+python-dotenv==1.0.1
+
+# HTTP client (async, used as fallback and for testing)
+httpx==0.28.1
+
+# Templating engine (bundled with FastAPI but pinned for clarity)
+jinja2==3.1.5
+
+# Session management for FastAPI
+itsdangerous==2.2.0
+starlette==0.41.3

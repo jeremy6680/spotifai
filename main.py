@@ -1,12 +1,15 @@
 # main.py
 # FastAPI application entry point.
-# Registers routes, mounts static files, configures sessions, and starts the server.
+# Registers routes, mounts static files, configures sessions,
+# and initializes the database on startup.
 
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
 from config import settings
+from api.routes import router
+from db.database import init_db
 
 # ---------------------------------------------------------------------------
 # App initialization
@@ -18,29 +21,28 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# Session middleware — needed to store the Spotify OAuth token server-side
-# SECRET_KEY signs the session cookie to prevent tampering
+# Session middleware — stores the Spotify OAuth token server-side.
+# SECRET_KEY signs the session cookie to prevent client-side tampering.
 app.add_middleware(SessionMiddleware, secret_key=settings.secret_key)
 
 # Serve static files (CSS, JS) at /static
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# ---------------------------------------------------------------------------
-# Routes — will be imported from api/routes.py once implemented
-# ---------------------------------------------------------------------------
-
-# TODO: from api.routes import router
-# TODO: app.include_router(router)
+# Register all routes from api/routes.py
+app.include_router(router)
 
 
 # ---------------------------------------------------------------------------
-# Health check endpoint (useful for testing the server is up)
+# Startup event — runs once when the server starts
 # ---------------------------------------------------------------------------
 
-@app.get("/health")
-async def health_check():
-    """Simple endpoint to verify the server is running."""
-    return {"status": "ok", "app": "SpotifAI"}
+@app.on_event("startup")
+async def on_startup():
+    """
+    Initialize the DuckDB database on server startup.
+    Creates tables if they don't exist yet — safe to run every time.
+    """
+    init_db()
 
 
 # ---------------------------------------------------------------------------
@@ -50,4 +52,4 @@ async def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)

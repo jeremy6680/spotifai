@@ -1,8 +1,147 @@
 # api/llm.py
 # Claude API wrapper.
-# Handles prompt construction, API calls, JSON extraction from responses,
-# and retry logic for malformed outputs.
+# Handles API calls, JSON parsing, and retry logic for malformed responses.
 
-# TODO: implement extract_criteria() — parse user text input into Spotify params JSON
-# TODO: implement generate_playlist_title() — generate title + description from tracks
-# TODO: implement retry logic for invalid JSON responses (max 2 retries)
+import json
+import re
+
+from anthropic import Anthropic
+
+from config import settings
+from db.models import LLMCriteriaOutput
+
+# ---------------------------------------------------------------------------
+# Anthropic client — singleton instance
+# ---------------------------------------------------------------------------
+
+client = Anthropic(api_key=settings.anthropic_api_key)
+
+# Model to use — Sonnet is the best balance of quality and cost for this use case
+# ~$0.003 per playlist generation (CDC section 9.3)
+MODEL = "claude-sonnet-4-20250514"
+
+MAX_RETRIES = 2
+
+
+# ---------------------------------------------------------------------------
+# JSON extraction helper
+# ---------------------------------------------------------------------------
+
+def _extract_json(text: str) -> dict:
+    """
+    Extract and parse a JSON object from a Claude response string.
+
+    Claude sometimes wraps JSON in markdown code blocks (```json ... ```)
+    despite being instructed not to. This function handles both cases:
+    - Clean JSON string
+    - JSON wrapped in markdown code block
+    """
+    # Strip markdown code block if present
+    text = text.strip()
+    if text.startswith("```"):
+        # Remove opening fence (```json or ```)
+        text = re.sub(r"^```[a-z]*\n?", "", text)
+        # Remove closing fence
+        text = re.sub(r"\n?```$", "", text)
+
+    return json.loads(text.strip())
+
+
+# ---------------------------------------------------------------------------
+# Criteria extraction
+# ---------------------------------------------------------------------------
+
+def extract_criteria(
+    system_message: str,
+    user_message: str,
+) -> LLMCriteriaOutput:
+    """
+    Call Claude to extract structured Spotify parameters from the user's prompt.
+    Validates the response against the LLMCriteriaOutput Pydantic model.
+    Retries up to MAX_RETRIES times if the response is not valid JSON.
+
+    Raises ValueError if all retries fail.
+    """
+    messages = [{"role": "user", "content": user_message}]
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 2):  # +2 = initial attempt + retries
+        print(f"[llm] extract_criteria attempt {attempt}/{MAX_RETRIES + 1}")
+
+        response = client.messages.create(
+            model=MODEL,
+            max_tokens=1000,
+            system=system_message,
+            messages=messages,
+        )
+
+        raw_text = response.content[0].text
+        print(f"[llm] Raw response: {raw_text[:200]}...")  # Log first 200 chars
+
+        try:
+            data = _extract_json(raw_text)
+            criteria = LLMCriteriaOutput(**data)
+
+            # Enforce Spotify's 5-seed limit (CDC section 9.1)
+            total_seeds = len(criteria.seed_genres) + len(criteria.seed_artists)
+            if total_seeds > 5:
+                # Trim seed_artists first, then seed_genres if still over
+                while len(criteria.seed_genres) + len(criteria.seed_artists) > 5:
+                    if criteria.seed_artists:
+                        criteria.seed_artists.pop()
+                    else:
+                        criteria.seed_genres.pop()
+
+            print(f"[llm] Criteria extracted: {criteria.model_dump()}")
+            return criteria
+
+        except (json.JSONDecodeError, ValueError) as e:
+            last_error = e
+            print(f"[llm] Attempt {attempt} failed: {e}")
+
+            if attempt <= MAX_RETRIES:
+                # Add the failed response to the conversation and ask Claude to fix it
+                messages.append({"role": "assistant", "content": raw_text})
+                messages.append({
+                    "role": "user",
+                    "content": f"Your response was not valid JSON. Error: {e}. "
+                               f"Please return only a valid JSON object, nothing else."
+                })
+
+    raise ValueError(
+        f"Failed to extract valid JSON criteria after {MAX_RETRIES + 1} attempts. "
+        f"Last error: {last_error}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Title and description generation
+# ---------------------------------------------------------------------------
+
+def generate_playlist_title(
+    system_message: str,
+    user_message: str,
+) -> tuple[str, str]:
+    """
+    Call Claude to generate a playlist title and description.
+    Returns a tuple: (title, description)
+    Falls back to generic values if parsing fails.
+    """
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=200,
+        system=system_message,
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    raw_text = response.content[0].text
+
+    try:
+        data = _extract_json(raw_text)
+        title = data.get("title", "My SpotifAI Playlist")
+        description = data.get("description", "Generated by SpotifAI")
+        return title, description
+
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[llm] Failed to parse title response: {e}. Using fallback.")
+        return "My SpotifAI Playlist", "Generated by SpotifAI"

@@ -58,6 +58,26 @@ Last updated: 2026-03-04
 
 ---
 
+## ADR-007 — Genres inférés par le LLM plutôt qu'extraits de Spotify
+
+**Date:** 2026-03-04  
+**Status:** Accepted
+
+**Context:** L'endpoint Spotify `current_user_top_artists` retourne des tableaux `genres` vides pour la majorité des artistes (dégradation progressive de l'API publique Spotify, constatée en mars 2026). Les audio features sont également dépréciées depuis 2024.
+
+**Decision:** Ne pas s'appuyer sur les genres Spotify dans le profil utilisateur. À la place, passer les noms des top artistes directement au LLM et laisser Claude inférer les genres associés.
+
+**Rationale:**
+- Claude connaît précisément les genres associés aux artistes populaires
+- L'inférence LLM est plus nuancée que les tags Spotify (qui étaient de toute façon très larges)
+- Pas de complexité supplémentaire — les artistes sont déjà dans le profil
+
+**Impact sur le prompt engineering:** Le system prompt enrichi envoyé à Claude inclura la liste des top artistes (noms) plutôt qu'une liste de genres. Claude utilisera ces artistes comme contexte pour inférer le profil musical.
+
+**Phase 3 impact:** Aucun — cette logique vit dans `core/prompts.py` et peut être affinée indépendamment.
+
+---
+
 ## ADR-003 — DuckDB for local persistence
 
 **Date:** 2026-03-04  

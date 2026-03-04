@@ -1,7 +1,7 @@
 # api/spotify.py
 # Spotify API wrapper.
 # Handles OAuth2 Authorization Code Flow via Spotipy,
-# and will contain all data-fetching functions in later steps.
+# and all data-fetching functions used by core/ modules.
 
 import spotipy
 from spotipy.oauth2 import SpotifyOAuth
@@ -59,3 +59,123 @@ def get_spotify_client(token_info: dict) -> spotipy.Spotify:
         token_info = auth_manager.refresh_access_token(token_info["refresh_token"])
 
     return spotipy.Spotify(auth=token_info["access_token"])
+
+
+# ---------------------------------------------------------------------------
+# User profile data fetching
+# ---------------------------------------------------------------------------
+
+def get_user_top_tracks(sp: spotipy.Spotify) -> list[dict]:
+    """
+    Fetch the user's top tracks across three time ranges.
+
+    Spotify defines three time ranges:
+    - short_term:  last ~4 weeks
+    - medium_term: last ~6 months
+    - long_term:   all time
+
+    We fetch all three and deduplicate by track ID, keeping the earliest
+    time range as a proxy for "most relevant recently".
+    Returns a flat list of simplified track dicts.
+    """
+    seen_ids = set()
+    tracks = []
+
+    for term in ["short_term", "medium_term", "long_term"]:
+        results = sp.current_user_top_tracks(limit=50, time_range=term)
+        for item in results.get("items", []):
+            if item["id"] not in seen_ids:
+                seen_ids.add(item["id"])
+                tracks.append({
+                    "id": item["id"],
+                    "name": item["name"],
+                    "artists": [a["name"] for a in item["artists"]],
+                    "uri": item["uri"],
+                    "time_range": term,
+                })
+
+    return tracks
+
+
+def get_user_top_artists(sp: spotipy.Spotify) -> tuple[list[dict], list[str]]:
+    """
+    Fetch the user's top artists and extract their associated genres.
+
+    Returns a tuple:
+    - artists: list of simplified artist dicts
+    - genres: deduplicated flat list of all genres across all top artists
+    """
+    seen_ids = set()
+    artists = []
+    genre_counts: dict[str, int] = {}
+
+    for term in ["short_term", "medium_term", "long_term"]:
+        results = sp.current_user_top_artists(limit=50, time_range=term)
+        for item in results.get("items", []):
+            if item["id"] not in seen_ids:
+                seen_ids.add(item["id"])
+                artists.append({
+                    "id": item["id"],
+                    "name": item["name"],
+                    "genres": item.get("genres", []),
+                    "uri": item["uri"],
+                    "time_range": term,
+                })
+                # Count genre occurrences to weight by popularity
+                for genre in item.get("genres", []):
+                    genre_counts[genre] = genre_counts.get(genre, 0) + 1
+
+    # Sort genres by frequency (most listened-to genres first)
+    genres = sorted(genre_counts, key=genre_counts.get, reverse=True)
+
+    return artists, genres
+
+
+def get_recently_played(sp: spotipy.Spotify) -> list[dict]:
+    """
+    Fetch the user's recently played tracks (up to 100).
+
+    The Spotify API caps this endpoint at 50 tracks per call.
+    We make two paginated calls using the 'before' cursor to get up to 100.
+    Note from CDC section 9.1: audio features are deprecated for new tracks
+    since 2024, so we don't fetch them here.
+    """
+    tracks = []
+    seen_ids = set()
+
+    # First call — most recent 50
+    results = sp.current_user_recently_played(limit=50)
+    items = results.get("items", [])
+
+    for item in items:
+        track = item["track"]
+        if track["id"] not in seen_ids:
+            seen_ids.add(track["id"])
+            tracks.append({
+                "id": track["id"],
+                "name": track["name"],
+                "artists": [a["name"] for a in track["artists"]],
+                "uri": track["uri"],
+                "played_at": item["played_at"],
+            })
+
+    # Second call — next 50 using the cursor from the first response
+    cursors = results.get("cursors")
+    if cursors and cursors.get("before"):
+        results2 = sp.current_user_recently_played(
+            limit=50,
+            before=cursors["before"]
+        )
+        for item in results2.get("items", []):
+            track = item["track"]
+            if track["id"] not in seen_ids:
+                seen_ids.add(track["id"])
+                tracks.append({
+                    "id": track["id"],
+                    "name": track["name"],
+                    "artists": [a["name"] for a in track["artists"]],
+                    "uri": track["uri"],
+                    "played_at": item["played_at"],
+                })
+
+    return tracks

@@ -1,0 +1,40 @@
+# Environment variables — never commit credentials
+.env
+
+# DuckDB database file — contains user data, not for version control
+data/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# macOS system files
+.DS_Store
+
+# IDE / editor configs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Spotipy token cache (contains OAuth tokens)
+.cache
+.cache-*
+
+# Pytest
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/

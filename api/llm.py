@@ -115,6 +115,41 @@ def extract_criteria(
 
 
 # ---------------------------------------------------------------------------
+# Search queries generation
+# ---------------------------------------------------------------------------
+
+def generate_search_queries(
+    system_message: str,
+    user_message: str,
+) -> list[str]:
+    """
+    Call Claude to generate Spotify search query strings from extracted criteria.
+    Returns a list of query strings.
+    Falls back to a generic query if parsing fails.
+    """
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=500,
+        system=system_message,
+        messages=[{"role": "user", "content": user_message}],
+    )
+
+    raw_text = response.content[0].text
+    print(f"[llm] Search queries raw response: {raw_text}")
+
+    try:
+        queries = _extract_json(raw_text)
+        if isinstance(queries, list) and all(isinstance(q, str) for q in queries):
+            return queries[:6]  # Cap at 6 queries
+        raise ValueError("Response is not a list of strings")
+
+    except (json.JSONDecodeError, ValueError) as e:
+        print(f"[llm] Failed to parse search queries: {e}. Using fallback.")
+        # Fallback: return a single generic query
+        return ["genre:indie year:2010-2024"]
+
+
+# ---------------------------------------------------------------------------
 # Title and description generation
 # ---------------------------------------------------------------------------
 

@@ -75,4 +75,5 @@ Last updated: 2026-03-04
 
 ## 🐛 Known Issues
 
-*None yet.*
+- **Spotify genres vides** : `current_user_top_artists` retourne `genres: []` pour tous les artistes (dégradation API Spotify, mars 2026). Contournement : genres inférés par le LLM à partir des noms d'artistes. Voir ADR-007.
+- **Audio features indisponibles** : Spotify a déprécié cet endpoint pour les nouvelles tracks en 2024. `audio_features_avg` retourne les valeurs par défaut (0.5). Le profil s'appuiera donc uniquement sur les artistes et tracks pour le contexte LLM.

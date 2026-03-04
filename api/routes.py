@@ -7,6 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse, JSONResponse
 
 from api.spotify import get_auth_manager, get_spotify_client
+from core.profile import sync_user_profile
 
 router = APIRouter()
 
@@ -93,6 +94,40 @@ async def get_current_user(request: Request):
     return JSONResponse(content={
         "user_id": request.session.get("user_id"),
         "display_name": request.session.get("display_name"),
+    })
+
+
+# ---------------------------------------------------------------------------
+# Profile sync
+# ---------------------------------------------------------------------------
+
+@router.post("/sync")
+async def sync_profile(request: Request):
+    """
+    Sync the user's musical profile from Spotify to DuckDB.
+    Fetches top tracks, top artists, recently played, and computes audio features.
+    Triggered manually by the user via the "Sync mon profil" button.
+    """
+    token_info = request.session.get("token_info")
+    user_id = request.session.get("user_id")
+
+    if not token_info or not user_id:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Not logged in"}
+        )
+
+    sp = get_spotify_client(token_info)
+    profile = sync_user_profile(user_id, sp)
+
+    return JSONResponse(content={
+        "message": "Profile synced successfully",
+        "user_id": profile.user_id,
+        "synced_at": profile.synced_at.isoformat(),
+        "top_genres": profile.top_genres[:10],  # Return top 10 for display
+        "top_artists_count": len(profile.top_artists),
+        "top_tracks_count": len(profile.top_tracks),
+        "audio_features_avg": profile.audio_features_avg.model_dump(),
     })
 
 

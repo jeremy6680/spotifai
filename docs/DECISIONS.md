@@ -43,6 +43,21 @@ Last updated: 2026-03-04
 
 ---
 
+## ADR-006 — Redirect URI : 127.0.0.1 plutôt que localhost
+
+**Date:** 2026-03-04  
+**Status:** Accepted
+
+**Context:** Spotify bloque désormais `http://localhost:8000/callback` dans son dashboard (avertissement de sécurité non contournable).
+
+**Decision:** Utiliser `http://127.0.0.1:8000/callback` comme redirect URI.
+
+**Rationale:** `127.0.0.1` est l'adresse IP de loopback — c'est strictement équivalent à `localhost` en pratique. Spotify l'accepte sans blocage.
+
+**Phase 3 impact:** En production, remplacer par une vraie URL `https://`.
+
+---
+
 ## ADR-003 — DuckDB for local persistence
 
 **Date:** 2026-03-04  

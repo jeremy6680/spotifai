@@ -97,6 +97,207 @@ def get_user_top_tracks(sp: spotipy.Spotify) -> list[dict]:
     return tracks
 
 
+# ---------------------------------------------------------------------------
+# Recommendations
+# ---------------------------------------------------------------------------
+
+def get_recommendations(sp: spotipy.Spotify, criteria: dict) -> list[dict]:
+    """
+    Call Spotify /recommendations with extracted LLM criteria.
+
+    Spotify constraints (CDC section 9.1):
+    - seed_genres + seed_artists combined: max 5 items total
+    - Some markets may not have all tracks available
+    - audio features (target_energy, target_valence, etc.) are hints, not filters
+
+    Returns a list of simplified track dicts.
+    """
+    # Build seeds — Spotify expects separate seed_genres and seed_artists params
+    seed_genres = criteria.get("seed_genres", [])
+    seed_artists = criteria.get("seed_artists", [])
+
+    # Safety check: enforce 5-seed limit (already enforced in llm.py but defensive here)
+    total = len(seed_genres) + len(seed_artists)
+    if total > 5:
+        allowed_artists = max(0, 5 - len(seed_genres))
+        seed_artists = seed_artists[:allowed_artists]
+
+    # Build kwargs for Spotipy — only include non-null audio feature targets
+    kwargs = {
+        "seed_genres": seed_genres if seed_genres else None,
+        "seed_artists": seed_artists if seed_artists else None,
+        "limit": criteria.get("limit", 30),
+        "country": criteria.get("market", "FR"),
+    }
+
+    # Map optional audio feature targets
+    feature_map = {
+        "target_energy": "target_energy",
+        "target_valence": "target_valence",
+        "target_tempo": "target_tempo",
+        "target_danceability": "target_danceability",
+        "target_acousticness": "target_acousticness",
+    }
+    for criteria_key, spotify_key in feature_map.items():
+        value = criteria.get(criteria_key)
+        if value is not None:
+            kwargs[spotify_key] = value
+
+    # Remove None values — Spotipy doesn't accept None kwargs
+    kwargs = {k: v for k, v in kwargs.items() if v is not None}
+
+    print(f"[spotify] Calling /recommendations with: {kwargs}")
+    results = sp.recommendations(**kwargs)
+
+    tracks = []
+    for item in results.get("tracks", []):
+        # Filter by year range if specified
+        release_date = item["album"].get("release_date", "")
+        year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+
+        year_min = criteria.get("year_min")
+        year_max = criteria.get("year_max")
+
+        if year_min and year and year < year_min:
+            continue
+        if year_max and year and year > year_max:
+            continue
+
+        tracks.append({
+            "id": item["id"],
+            "uri": item["uri"],
+            "name": item["name"],
+            "artists": [a["name"] for a in item["artists"]],
+            "album": item["album"]["name"],
+            "release_date": release_date,
+            "duration_ms": item["duration_ms"],
+            "preview_url": item.get("preview_url"),
+            "external_url": item["external_urls"].get("spotify"),
+            "image_url": item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+        })
+
+    print(f"[spotify] Got {len(tracks)} tracks after year filtering")
+    return tracks
+
+
+# ---------------------------------------------------------------------------
+# Search-based track discovery (replaces /recommendations — see ADR-008)
+# ---------------------------------------------------------------------------
+
+def search_tracks(
+    sp: spotipy.Spotify,
+    queries: list[str],
+    criteria: dict,
+    target_count: int = 30,
+) -> list[dict]:
+    """
+    Search for tracks using multiple query strings and return a deduplicated,
+    filtered list.
+
+    Strategy:
+    - Run each query against Spotify /search (10 results per query)
+    - Deduplicate by track ID
+    - Filter by year range if specified in criteria
+    - Sort by popularity (descending) and return top target_count tracks
+    """
+    seen_ids = set()
+    tracks = []
+
+    year_min = criteria.get("year_min")
+    year_max = criteria.get("year_max")
+    market = criteria.get("market", "FR")
+
+    for query in queries:
+        print(f"[spotify] Searching: '{query}'")
+        try:
+            results = sp.search(
+                q=query,
+                type="track",
+                limit=10,
+                market=market,
+            )
+        except Exception as e:
+            print(f"[spotify] Search failed for '{query}': {e}")
+            continue
+
+        for item in results.get("tracks", {}).get("items", []):
+            if not item or item["id"] in seen_ids:
+                continue
+
+            # Filter by year range if specified
+            release_date = item["album"].get("release_date", "")
+            year = int(release_date[:4]) if release_date and len(release_date) >= 4 else None
+
+            if year_min and year and year < year_min:
+                continue
+            if year_max and year and year > year_max:
+                continue
+
+            seen_ids.add(item["id"])
+            tracks.append({
+                "id": item["id"],
+                "uri": item["uri"],
+                "name": item["name"],
+                "artists": [a["name"] for a in item["artists"]],
+                "album": item["album"]["name"],
+                "release_date": release_date,
+                "duration_ms": item["duration_ms"],
+                "popularity": item.get("popularity", 0),
+                "preview_url": item.get("preview_url"),
+                "external_url": item["external_urls"].get("spotify"),
+                "image_url": item["album"]["images"][0]["url"] if item["album"]["images"] else None,
+            })
+
+    # Sort by popularity and cap at target_count
+    tracks.sort(key=lambda t: t["popularity"], reverse=True)
+    tracks = tracks[:target_count]
+
+    print(f"[spotify] Got {len(tracks)} tracks after dedup and filtering")
+    return tracks
+
+
+# ---------------------------------------------------------------------------
+# Playlist management
+# ---------------------------------------------------------------------------
+
+def create_playlist(
+    sp: spotipy.Spotify,
+    user_id: str,
+    title: str,
+    description: str,
+    public: bool = False
+) -> dict:
+    """
+    Create an empty playlist in the user's Spotify account.
+    Returns the Spotify playlist object (id, url, etc.).
+    """
+    playlist = sp.user_playlist_create(
+        user=user_id,
+        name=title,
+        public=public,
+        description=description,
+    )
+    print(f"[spotify] Created playlist: {playlist['id']} — {title}")
+    return playlist
+
+
+def add_tracks_to_playlist(
+    sp: spotipy.Spotify,
+    playlist_id: str,
+    track_uris: list[str]
+) -> None:
+    """
+    Add tracks to an existing Spotify playlist.
+    Spotify accepts max 100 tracks per call — we chunk if needed.
+    """
+    # Chunk into batches of 100 (Spotify API limit)
+    chunk_size = 100
+    for i in range(0, len(track_uris), chunk_size):
+        chunk = track_uris[i:i + chunk_size]
+        sp.playlist_add_items(playlist_id, chunk)
+        print(f"[spotify] Added {len(chunk)} tracks to playlist {playlist_id}")
+
+
 def get_user_top_artists(sp: spotipy.Spotify) -> tuple[list[dict], list[str]]:
     """
     Fetch the user's top artists and extract their associated genres.

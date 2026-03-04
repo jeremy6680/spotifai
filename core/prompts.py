@@ -109,6 +109,61 @@ trip-hop, world-music"""
     return system_message, user_message
 
 
+def build_search_queries_prompt(
+    criteria: dict,
+    profile: "UserProfile | None"
+) -> tuple[str, str]:
+    """
+    Build messages for an intermediate LLM call that converts extracted criteria
+    into concrete Spotify search queries.
+
+    Why a separate call? The /search endpoint needs specific query strings
+    (e.g. 'genre:post-rock year:2010-2024'), not abstract parameters.
+    Claude is better at building these than a hardcoded template.
+
+    Returns a tuple: (system_message, user_message)
+    """
+    # Include top artist names for context so Claude can suggest similar artists
+    top_artist_names = []
+    if profile:
+        top_artist_names = [a["name"] for a in profile.top_artists[:15]]
+
+    artist_context = ""
+    if top_artist_names:
+        artist_context = f"""
+## User's top artists (for context)
+{', '.join(top_artist_names)}
+You can suggest artists similar to these in your search queries.
+"""
+
+    system_message = f"""You are a Spotify search expert.
+Your job is to convert playlist criteria into effective Spotify search queries.
+{artist_context}
+Return ONLY a JSON array of 4 to 6 search query strings.
+Each query will be sent directly to the Spotify search API (track search).
+
+Effective query formats:
+- "genre:post-rock year:2010-2024"
+- "artist:Mogwai genre:post-rock"
+- "genre:shoegaze genre:ambient"
+- "post-rock instrumental japan"
+
+Rules:
+- Vary the queries to maximize track diversity
+- Mix genre-based and artist-based queries
+- Keep each query under 100 characters
+- Return ONLY the JSON array, no explanation, no markdown
+
+Example output:
+["genre:post-rock year:2010-2024", "genre:math-rock instrumental", "artist:Toe genre:post-rock"]`"""
+
+    user_message = f"""Criteria: {criteria}
+
+Generate search queries to find matching tracks."""
+
+    return system_message, user_message
+
+
 def build_title_generation_prompt(
     user_prompt: str,
     tracks: list[dict]

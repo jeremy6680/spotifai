@@ -73,6 +73,12 @@ Last updated: 2026-03-04
 
 ---
 
+## ⚠️ Architecture Change
+
+**`/recommendations` endpoint inaccessible** — Spotify a restreint cet endpoint aux apps en Extended Quota Mode (organisations avec 250k MAUs minimum) depuis fin 2024. SpotifAI utilise à la place une stratégie de recherche via `/search` + filtrage. Voir ADR-008.
+
+---
+
 ## 🐛 Known Issues
 
 - **Spotify genres vides** : `current_user_top_artists` retourne `genres: []` pour tous les artistes (dégradation API Spotify, mars 2026). Contournement : genres inférés par le LLM à partir des noms d'artistes. Voir ADR-007.

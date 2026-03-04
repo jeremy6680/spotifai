@@ -78,6 +78,31 @@ Last updated: 2026-03-04
 
 ---
 
+## ADR-008 — Remplacement de `/recommendations` par `/search` + filtrage
+
+**Date:** 2026-03-04  
+**Status:** Accepted
+
+**Context:** L'endpoint Spotify `/recommendations` est inaccessible en Development Mode depuis fin 2024. L'Extended Quota Mode est réservé aux organisations avec 250k MAUs minimum — hors de portée pour un projet perso.
+
+**Decision:** Remplacer `/recommendations` par une stratégie basée sur `/search` :
+1. Claude extrait les mêmes critères qu'avant (genres, artistes, mood, période)
+2. On construit plusieurs requêtes de recherche ciblées depuis ces critères
+3. On déduplique et filtre les résultats (année, popularité)
+4. On retourne une playlist cohérente
+
+**Rationale:**
+- `/search` est disponible en Development Mode
+- Le résultat est moins « magique » que `/recommendations` mais reste pertinent
+- La logique LLM en amont reste identique — seul le module `api/spotify.py` change
+- C'est un bon angle pour l'article de blog (CDC section 10)
+
+**Trade-off:** Les résultats sont moins personnalisés qu'avec `/recommendations` (pas de seeds audio features). On compense en passant les top artistes de l'utilisateur comme contexte supplémentaire à Claude pour qu'il génère des requêtes de recherche plus ciblées.
+
+**Phase 3 impact:** Aucun — si Spotify rouvre `/recommendations`, le remplacement se fait uniquement dans `api/spotify.py`.
+
+---
+
 ## ADR-003 — DuckDB for local persistence
 
 **Date:** 2026-03-04  

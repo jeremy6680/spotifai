@@ -3,11 +3,11 @@
 # This layer handles HTTP only: it reads requests, calls core/ or api/ modules,
 # and returns responses. No business logic here.
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Body
 from fastapi.responses import RedirectResponse, JSONResponse
-
 from api.spotify import get_auth_manager, get_spotify_client
 from core.profile import sync_user_profile
+from core.generator import generate_playlist
 
 router = APIRouter()
 
@@ -129,6 +129,58 @@ async def sync_profile(request: Request):
         "top_tracks_count": len(profile.top_tracks),
         "audio_features_avg": profile.audio_features_avg.model_dump(),
     })
+
+
+# ---------------------------------------------------------------------------
+# Playlist generation
+# ---------------------------------------------------------------------------
+
+@router.post("/generate")
+async def generate(request: Request, body: dict = Body(...)):
+    """
+    Generate a playlist from a natural language prompt.
+
+    Expects a JSON body: { "prompt": "Post-rock instrumental, influence japonaise" }
+
+    Pipeline:
+    1. Extract Spotify parameters from prompt via Claude
+    2. Fetch recommendations from Spotify
+    3. Generate title + description via Claude
+    4. Save to DuckDB history
+    5. Return tracks + metadata
+    """
+    token_info = request.session.get("token_info")
+    user_id = request.session.get("user_id")
+
+    if not token_info or not user_id:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Not logged in"}
+        )
+
+    prompt = body.get("prompt", "").strip()
+    if not prompt:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "prompt is required"}
+        )
+
+    try:
+        sp = get_spotify_client(token_info)
+        result = generate_playlist(user_id, prompt, sp)
+        return JSONResponse(content=result)
+
+    except ValueError as e:
+        return JSONResponse(
+            status_code=422,
+            content={"error": str(e)}
+        )
+    except Exception as e:
+        print(f"[routes] /generate error: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"error": "An unexpected error occurred. Please try again."}
+        )
 
 
 @router.get("/logout")

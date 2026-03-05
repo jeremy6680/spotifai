@@ -42,6 +42,12 @@ const dom = {
 
     // Sync dot
     syncDot: document.getElementById('sync-dot'),
+
+    // Sticky save CTA (floating bar at bottom of viewport)
+    saveCTASticky:      document.getElementById('save-cta-sticky'),
+    btnSaveSticky:      document.getElementById('btn-save-sticky'),
+    stickyPlaylistTitle: document.getElementById('sticky-playlist-title'),
+    stickyTrackCount:   document.getElementById('sticky-track-count'),
 };
 
 /* ==========================================================================
@@ -460,8 +466,66 @@ function stopCurrentPreview() {
 }
 
 /* ==========================================================================
-   9. Playlist Generation — Main Flow
-   Sends prompt to /api/generate, handles loading states and renders results.
+   9. Error Handling Helpers
+   Centralised fetch error parsing — keeps each handler clean.
+   ========================================================================== */
+
+/**
+ * Parse a fetch Response that has a non-OK status code.
+ * Attempts to read the JSON body for a human-readable error message.
+ * If the server returns { action: "login" }, redirects to /login.
+ *
+ * @param {Response} response - A fetch Response with response.ok === false
+ * @returns {Promise<string>}  - A human-readable error message
+ */
+async function parseFetchError(response) {
+    let message = `Erreur ${response.status} du serveur.`;
+
+    try {
+        const data = await response.json();
+
+        // Server asked us to redirect to login (token expired / revoked)
+        if (data.action === 'login') {
+            showAlert('Ta session Spotify a expiré. Reconnexion…', 'info');
+            // Short delay so the user sees the message before redirect
+            setTimeout(() => { window.location.href = '/login'; }, 1500);
+            return null; // Caller should bail out — redirect is in progress
+        }
+
+        if (data.error) message = data.error;
+        else if (data.detail) message = data.detail;
+
+    } catch { /* JSON parse failed — keep the generic message */ }
+
+    // Human-friendly overrides for common HTTP status codes
+    if (response.status === 401) {
+        message = 'Tu n’es plus connecté. <a href="/login">Reconnecte-toi</a>.';
+    } else if (response.status === 429) {
+        message = 'Trop de requêtes. Patiente quelques secondes et réessaie.';
+    } else if (response.status >= 500) {
+        message = 'Le serveur a rencontré une erreur. Réessaie dans un moment.';
+    }
+
+    return message;
+}
+
+/**
+ * Detect and format network-level errors (offline, DNS failure, etc.).
+ * These are thrown by fetch() as TypeError before any HTTP response.
+ *
+ * @param {unknown} error - The caught error from a try/catch around fetch()
+ * @returns {string|null}  - Human-readable message, or null if not a network error
+ */
+function parseNetworkError(error) {
+    if (error instanceof TypeError && error.message.toLowerCase().includes('fetch')) {
+        return 'Impossible de joindre le serveur. Vérifie ta connexion internet.';
+    }
+    return null;
+}
+
+/* ==========================================================================
+   10. Playlist Generation — Main Flow
+   Sends prompt to /generate, handles loading states and renders results.
    ========================================================================== */
 
 /**
@@ -507,11 +571,8 @@ async function handleGenerate() {
 
         // Handle HTTP errors (4xx / 5xx)
         if (!response.ok) {
-            let errorMessage = `Erreur ${response.status} du serveur.`;
-            try {
-                const errData = await response.json();
-                if (errData.detail) errorMessage = errData.detail;
-            } catch { /* ignore JSON parse error */ }
+            const errorMessage = await parseFetchError(response);
+            if (!errorMessage) return; // redirect in progress (login)
             throw new Error(errorMessage);
         }
 
@@ -541,7 +602,9 @@ async function handleGenerate() {
     } catch (error) {
         stopStepAnimation();
         hideGenerationStatus();
-        showAlert(error.message || 'Une erreur inattendue est survenue.', 'error');
+        // Distinguish network errors (offline) from server errors
+        const networkMsg = parseNetworkError(error);
+        showAlert(networkMsg || error.message || 'Une erreur inattendue est survenue.', 'error');
         console.error('[SpotifAI] Generation error:', error);
     } finally {
         // Always reset loading state
@@ -581,6 +644,19 @@ function renderResults(data) {
     // Hide the save banner (it may be visible from a previous generation)
     if (dom.saveBanner) dom.saveBanner.classList.remove('is-visible');
     if (dom.btnSave) dom.btnSave.disabled = false;
+
+    // Show the sticky save CTA at the bottom of the viewport
+    // Update label with playlist title and track count
+    if (dom.saveCTASticky) {
+        dom.saveCTASticky.classList.add('is-visible');
+        if (dom.stickyPlaylistTitle) {
+            dom.stickyPlaylistTitle.textContent = sanitize(data.title || 'Ta playlist est prête');
+        }
+        if (dom.stickyTrackCount) {
+            dom.stickyTrackCount.textContent = data.tracks.length;
+        }
+    }
+    if (dom.btnSaveSticky) dom.btnSaveSticky.disabled = false;
 }
 
 /* ==========================================================================
@@ -607,9 +683,13 @@ async function handleSave() {
 
     if (!dom.btnSave) return;
 
-    // Loading state on the save button
+    // Loading state on both save buttons (header + sticky)
     dom.btnSave.classList.add('btn--loading');
     dom.btnSave.disabled = true;
+    if (dom.btnSaveSticky) {
+        dom.btnSaveSticky.classList.add('btn--loading');
+        dom.btnSaveSticky.disabled = true;
+    }
 
     try {
         const response = await fetch('/save', {
@@ -627,11 +707,8 @@ async function handleSave() {
         });
 
         if (!response.ok) {
-            let msg = `Erreur ${response.status} lors de la sauvegarde.`;
-            try {
-                const err = await response.json();
-                if (err.detail) msg = err.detail;
-            } catch { /* ignore */ }
+            const msg = await parseFetchError(response);
+            if (!msg) return; // redirect in progress (login)
             throw new Error(msg);
         }
 
@@ -644,15 +721,27 @@ async function handleSave() {
 
         if (dom.saveBanner) dom.saveBanner.classList.add('is-visible');
 
-        // Disable the save button — playlist already saved
+        // Disable both save buttons — playlist already saved, prevent double-save
         dom.btnSave.disabled = true;
         dom.btnSave.classList.remove('btn--loading');
+
+        // Hide the sticky CTA — action is done, no longer needed
+        if (dom.saveCTASticky) dom.saveCTASticky.classList.remove('is-visible');
+        if (dom.btnSaveSticky) {
+            dom.btnSaveSticky.disabled = true;
+            dom.btnSaveSticky.classList.remove('btn--loading');
+        }
 
         showAlert('Playlist sauvegardée dans ton compte Spotify !', 'success');
 
     } catch (error) {
+        // Reset both buttons on error so user can retry
         dom.btnSave.disabled = false;
         dom.btnSave.classList.remove('btn--loading');
+        if (dom.btnSaveSticky) {
+            dom.btnSaveSticky.disabled = false;
+            dom.btnSaveSticky.classList.remove('btn--loading');
+        }
         showAlert(error.message || 'Erreur lors de la sauvegarde.', 'error');
         console.error('[SpotifAI] Save error:', error);
     }
@@ -685,7 +774,9 @@ async function handleSync() {
         });
 
         if (!response.ok) {
-            throw new Error(`Erreur ${response.status} lors de la synchronisation.`);
+            const msg = await parseFetchError(response);
+            if (!msg) return; // redirect in progress (login)
+            throw new Error(msg);
         }
 
         // Update sync dot to synced state
@@ -709,7 +800,8 @@ async function handleSync() {
         if (dom.syncDot) {
             dom.syncDot.className = 'profile-bar__dot';
         }
-        showAlert(error.message || 'Erreur lors de la synchronisation.', 'error');
+        const networkMsg = parseNetworkError(error);
+        showAlert(networkMsg || error.message || 'Erreur lors de la synchronisation.', 'error');
         console.error('[SpotifAI] Sync error:', error);
     } finally {
         dom.btnSync.classList.remove('btn--loading');
@@ -808,9 +900,14 @@ function init() {
         });
     }
 
-    // --- Save button ---
+    // --- Save button (results header) ---
     if (dom.btnSave) {
         dom.btnSave.addEventListener('click', handleSave);
+    }
+
+    // --- Save button sticky (floating bar) — shares the same handler ---
+    if (dom.btnSaveSticky) {
+        dom.btnSaveSticky.addEventListener('click', handleSave);
     }
 
     // --- Regenerate button ---
@@ -836,6 +933,17 @@ function init() {
                 hint.dataset.enhanced = '1';
             }
         }, { once: true });
+    }
+
+    // --- Prefill from ?prompt= query param (injected by Jinja2 via server-side redirect) ---
+    // If the textarea already has content on page load (e.g. coming from history page),
+    // auto-resize it and focus it so the user can generate immediately.
+    if (dom.promptInput && dom.promptInput.value.trim()) {
+        autoResizeTextarea(dom.promptInput);
+        dom.promptInput.focus();
+        // Move cursor to end of pre-filled text
+        const len = dom.promptInput.value.length;
+        dom.promptInput.setSelectionRange(len, len);
     }
 }
 

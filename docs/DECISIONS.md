@@ -103,6 +103,29 @@ Last updated: 2026-03-04
 
 ---
 
+## ADR-009 — Sauvegarde Spotify partielle (création playlist sans ajout de tracks)
+
+**Date:** 2026-03-05  
+**Status:** Accepted (contrainte externe)
+
+**Context:** `POST /v1/playlists/{id}/tracks` retourne systématiquement 403 pour les apps Spotify en mode Development, même avec les scopes `playlist-modify-public` et `playlist-modify-private` correctement configurés et un compte whitelisté. Testé en appel direct depuis le navigateur (bypass total du backend) — confirmé bloqué côté Spotify.
+
+Depuis mai 2025, Spotify n'accepte plus les demandes d'Extended Quota des individus (organisations uniquement, 250k MAUs minimum).
+
+**Decision:** Option A — le Step 6 crée la playlist vide dans le compte Spotify de l'utilisateur et retourne dans la réponse JSON : le lien direct vers la playlist + la liste complète des tracks avec leurs liens Spotify individuels. Le frontend (Step 7) affiche cette liste avec un lien "Ouvrir dans Spotify" par track, permettant à l'utilisateur d'ajouter manuellement les morceaux qui l'intéressent. C'est une UX dégradée mais fonctionnelle et honnête.
+
+**Contournements explorés et écartés :**
+- `sp.playlist_add_items()` → 403 (passe `position: None` dans les params)
+- `sp._post("playlists/{id}/tracks")` → 403 (même endpoint, même restriction)
+- Appel direct AJAX depuis le navigateur → 403 (confirme que c'est Spotify qui bloque, pas notre code)
+- Playlist publique vs privée → aucune différence
+
+**Rationale:** Le code est correct. La restriction est externe et documentée. On avance sans bloquer le projet.
+
+**Phase 3 impact:** Si Spotify rouvre l'endpoint ou si le projet passe sous une entité organisation, le fix est d'enlever le try/except et de réactiver `add_tracks_to_playlist()` dans `routes.py`.
+
+---
+
 ## ADR-003 — DuckDB for local persistence
 
 **Date:** 2026-03-04  

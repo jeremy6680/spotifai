@@ -1,6 +1,6 @@
 # SpotifAI — Next Steps
 
-Last updated: 2026-03-05
+Last updated: 2026-03-05 (deployment step added)
 
 ---
 
@@ -87,6 +87,18 @@ Last updated: 2026-03-05
 - [x] Persist full track list to DuckDB alongside playlist metadata
 - [x] Multi-delete playlists from history dashboard
 - [x] Final end-to-end test
+
+### Step 9 — Deployment ✅
+
+- [x] Write `Dockerfile` (multi-stage build, python:3.11-slim)
+- [x] Write `.dockerignore` (exclude `.env`, `data/`, caches)
+- [x] Write `docker-compose.yml` (local testing with named volume)
+- [x] Deploy on Coolify + Hetzner (build pack: Dockerfile, port: 8000)
+- [x] Configure persistent volume `/app/data` in Coolify
+- [x] Set all environment variables in Coolify
+- [x] Configure custom domain: `spotifai.lumafinch.com`
+- [x] Update `SPOTIFY_REDIRECT_URI` in Coolify + Spotify Developer Dashboard
+- [x] Live demo available at https://spotifai.lumafinch.com
 
 ---
 

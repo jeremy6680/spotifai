@@ -1,6 +1,6 @@
 # SpotifAI — Project Structure
 
-Last updated: 2026-03-05
+Last updated: 2026-03-05 (deployment files added)
 
 ```
 spotifai/
@@ -48,7 +48,10 @@ spotifai/
 ├── requirements.txt               # Python dependencies
 ├── .env.example                   # Environment variable template (safe to commit)
 ├── .env                           # Actual credentials (gitignored — never commit)
-└── .gitignore                     # Files excluded from version control
+├── .gitignore                     # Files excluded from version control
+├── Dockerfile                     # Multi-stage Docker build (used by Coolify)
+├── .dockerignore                  # Files excluded from Docker image build
+└── docker-compose.yml             # Local testing only (not used by Coolify)
 ```
 
 ## Module responsibilities

@@ -44,21 +44,38 @@ def get_auth_manager(cache_path: str = ".cache") -> SpotifyOAuth:
     )
 
 
-def get_spotify_client(token_info: dict) -> spotipy.Spotify:
+def get_spotify_client(token_info: dict) -> tuple[spotipy.Spotify, dict]:
     """
-    Build and return an authenticated Spotipy client from a token dict.
+    Build and return an authenticated Spotipy client + the (possibly refreshed) token.
 
-    token_info is the dict returned by SpotifyOAuth after the callback.
-    It contains: access_token, refresh_token, expires_at, scope, etc.
-    We store this dict in the FastAPI session after login.
+    Returns a tuple (sp, token_info) so the caller can persist the updated
+    token back into the session. This is critical: if the token was expired
+    and got refreshed here, the session must be updated — otherwise the next
+    request uses the old expired token and Spotify returns 403.
+
+    Always unpack as: sp, token_info = get_spotify_client(token_info)
+    Then save token_info back to request.session["token_info"].
     """
     auth_manager = get_auth_manager()
 
-    # If the token has expired, SpotifyOAuth refreshes it automatically
+    # Refresh the token if expired, and keep the updated token_info
     if auth_manager.is_token_expired(token_info):
+        print("[spotify] Token expired — refreshing...")
         token_info = auth_manager.refresh_access_token(token_info["refresh_token"])
+        print("[spotify] Token refreshed successfully")
 
-    return spotipy.Spotify(auth=token_info["access_token"])
+    # Warn if the token is missing required scopes.
+    # Cause: .cache was created before scopes were updated.
+    # Fix: rm .cache and re-authenticate via /login.
+    required_scopes = set(SPOTIFY_SCOPES.split())
+    token_scopes = set(token_info.get("scope", "").split())
+    missing = required_scopes - token_scopes
+    if missing:
+        print(f"[spotify] WARNING: token missing scopes: {missing}")
+        print("[spotify] Hint: rm .cache and re-authenticate via /login")
+
+    # Return BOTH the client and the (possibly updated) token_info
+    return spotipy.Spotify(auth=token_info["access_token"]), token_info
 
 
 # ---------------------------------------------------------------------------
@@ -269,14 +286,24 @@ def create_playlist(
 ) -> dict:
     """
     Create an empty playlist in the user's Spotify account.
+
+    Uses POST /v1/me/playlists instead of the deprecated
+    POST /v1/users/{user_id}/playlists which returns 403 for Development-mode
+    apps since Spotify's 2024 API restrictions.
+
+    user_id is kept as a parameter for API compatibility but is not used
+    in the actual Spotify call.
     Returns the Spotify playlist object (id, url, etc.).
     """
-    playlist = sp.user_playlist_create(
-        user=user_id,
-        name=title,
-        public=public,
-        description=description,
-    )
+    # Call /v1/me/playlists directly via Spotipy's internal _post method.
+    # sp.user_playlist_create() always builds /v1/users/{id}/playlists which
+    # is now restricted. /me/playlists works for the authenticated user.
+    payload = {
+        "name": title,
+        "public": public,
+        "description": description,
+    }
+    playlist = sp._post("me/playlists", payload=payload)
     print(f"[spotify] Created playlist: {playlist['id']} — {title}")
     return playlist
 
@@ -289,12 +316,20 @@ def add_tracks_to_playlist(
     """
     Add tracks to an existing Spotify playlist.
     Spotify accepts max 100 tracks per call — we chunk if needed.
+
+    Uses sp._post() directly to target /v1/playlists/{id}/tracks.
+    sp.playlist_add_items() passes a 'position' kwarg that triggers
+    a 403 on Development-mode apps with Spotify's 2024 API restrictions.
+    Calling _post() directly omits that parameter entirely.
     """
     # Chunk into batches of 100 (Spotify API limit)
     chunk_size = 100
     for i in range(0, len(track_uris), chunk_size):
         chunk = track_uris[i:i + chunk_size]
-        sp.playlist_add_items(playlist_id, chunk)
+        sp._post(
+            f"playlists/{playlist_id}/tracks",
+            payload={"uris": chunk},
+        )
         print(f"[spotify] Added {len(chunk)} tracks to playlist {playlist_id}")
 
 

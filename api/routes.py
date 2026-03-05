@@ -447,25 +447,6 @@ async def health_check():
     return {"status": "ok", "app": "SpotifAI"}
 
 
-@router.get("/debug/token")
-async def debug_token(request: Request):
-    """
-    DEV ONLY — inspect the current session token.
-    Shows scopes, expiry, and user_id to diagnose 403 issues.
-    Remove before shipping to production.
-    """
-    token_info = request.session.get("token_info")
-    user_id    = request.session.get("user_id")
-
-    if not token_info:
-        return JSONResponse(status_code=401, content={"error": "No token in session"})
-
-    return JSONResponse(content={
-        "user_id":           user_id,
-        "scope":             token_info.get("scope"),
-        "expires_at":        token_info.get("expires_at"),
-        "has_access_token":  bool(token_info.get("access_token")),
-        "has_refresh_token": bool(token_info.get("refresh_token")),
-        # DEV ONLY — remove before production
-        "access_token":      token_info.get("access_token"),
-    })
+# NOTE: /debug/token endpoint removed before public release.
+# It exposed the raw Spotify access_token in plain text.
+# To re-add for local debugging only: check git history.

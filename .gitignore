@@ -34,6 +34,12 @@ env/
 htmlcov/
 .coverage
 
+# Cookies file (may be created by HTTP clients during dev)
+cookies.txt
+
+# Qodo / CodiumAI IDE plugin
+.qodo/
+
 # Distribution / packaging
 dist/
 build/

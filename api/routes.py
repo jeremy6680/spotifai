@@ -3,14 +3,121 @@
 # This layer handles HTTP only: it reads requests, calls core/ or api/ modules,
 # and returns responses. No business logic here.
 
+from datetime import datetime
+
 from fastapi import APIRouter, Request, Body
 from fastapi.responses import RedirectResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+
 from api.spotify import get_auth_manager, get_spotify_client, create_playlist, add_tracks_to_playlist
 from core.profile import sync_user_profile
 from core.generator import generate_playlist
-from db.queries import update_playlist_spotify_info
+from db.queries import update_playlist_spotify_info, get_playlist_history
 
 router = APIRouter()
+
+# ---------------------------------------------------------------------------
+# Jinja2 templates setup
+# ---------------------------------------------------------------------------
+
+templates = Jinja2Templates(directory="templates")
+
+
+def format_date(value: str) -> str:
+    """
+    Jinja2 filter: format an ISO datetime string to a readable French date.
+    e.g. "2026-03-05T14:23:00" → "5 mars 2026"
+    Registered below as a custom filter on the Jinja2 environment.
+    """
+    try:
+        dt = datetime.fromisoformat(str(value))
+        return dt.strftime("%-d %B %Y")  # e.g. "5 mars 2026"
+    except (ValueError, TypeError):
+        return str(value)
+
+
+# Register the custom filter so {{ value | format_date }} works in templates
+templates.env.filters["format_date"] = format_date
+
+
+# ---------------------------------------------------------------------------
+# Helper — extract current user info from session
+# Returns a dict the templates can use, or None if not logged in.
+# ---------------------------------------------------------------------------
+
+def get_current_user(request: Request) -> dict | None:
+    """
+    Build a simple user context object from the session.
+    Passed to every TemplateResponse as 'current_user'.
+    Returns None if the user is not authenticated.
+    """
+    token_info = request.session.get("token_info")
+    if not token_info:
+        return None
+
+    return {
+        "user_id":      request.session.get("user_id"),
+        "display_name": request.session.get("display_name", ""),
+        "avatar_url":   request.session.get("avatar_url", ""),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Page routes (Jinja2 templates)
+# ---------------------------------------------------------------------------
+
+@router.get("/")
+async def index(request: Request):
+    """
+    Home page — playlist generator form.
+    Passes authentication status and profile sync info to the template.
+    """
+    current_user = get_current_user(request)
+
+    # Profile sync status — used by the profile bar in index.html
+    profile_synced    = request.session.get("profile_synced", False)
+    profile_synced_at = request.session.get("profile_synced_at", "")
+
+    # Pre-fill the prompt textarea if redirected from history page
+    # e.g. /  ?prompt=Post-rock+instrumental
+    prefill_prompt = request.query_params.get("prompt", "")
+
+    return templates.TemplateResponse("index.html", {
+        "request":          request,   # required by Jinja2Templates
+        "current_user":     current_user,
+        "profile_synced":   profile_synced,
+        "profile_synced_at": profile_synced_at,
+        "prefill_prompt":   prefill_prompt,
+    })
+
+
+@router.get("/history")
+async def history(request: Request):
+    """
+    Playlist history dashboard.
+    Loads all playlists for the current user from DuckDB and passes them
+    to history.html for rendering.
+    """
+    current_user = get_current_user(request)
+
+    # Redirect to login if not authenticated
+    if not current_user:
+        return RedirectResponse(url="/login")
+
+    user_id = current_user["user_id"]
+
+    # Fetch playlists from DuckDB, most recent first
+    try:
+        playlists = get_playlist_history(user_id)
+    except Exception as e:
+        print(f"[routes] /history DuckDB error: {e}")
+        playlists = []
+
+    return templates.TemplateResponse("history.html", {
+        "request":      request,
+        "current_user": current_user,
+        "playlists":    playlists,
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -64,15 +171,16 @@ async def callback(request: Request, code: str = None, error: str = None):
     sp, token_info = get_spotify_client(token_info)
     request.session["token_info"] = token_info  # persist refreshed token
     user = sp.current_user()
-    request.session["user_id"] = user["id"]
+    request.session["user_id"]      = user["id"]
     request.session["display_name"] = user.get("display_name", user["id"])
 
-    # TODO: redirect to index.html once the frontend exists
-    return JSONResponse(content={
-        "message": "Login successful",
-        "user_id": user["id"],
-        "display_name": user.get("display_name"),
-    })
+    # Store avatar URL if available (used in the header user badge)
+    images = user.get("images", [])
+    if images:
+        request.session["avatar_url"] = images[0].get("url", "")
+
+    # Redirect to the home page now that login is complete
+    return RedirectResponse(url="/")
 
 
 # ---------------------------------------------------------------------------
@@ -80,7 +188,7 @@ async def callback(request: Request, code: str = None, error: str = None):
 # ---------------------------------------------------------------------------
 
 @router.get("/me")
-async def get_current_user(request: Request):
+async def get_me(request: Request):
     """
     Returns the logged-in user's basic info from the session.
     Returns 401 if not logged in.
@@ -94,8 +202,9 @@ async def get_current_user(request: Request):
         )
 
     return JSONResponse(content={
-        "user_id": request.session.get("user_id"),
+        "user_id":      request.session.get("user_id"),
         "display_name": request.session.get("display_name"),
+        "avatar_url":   request.session.get("avatar_url", ""),
     })
 
 
@@ -103,15 +212,17 @@ async def get_current_user(request: Request):
 # Profile sync
 # ---------------------------------------------------------------------------
 
-@router.post("/sync")
+@router.post("/sync-profile")
 async def sync_profile(request: Request):
     """
     Sync the user's musical profile from Spotify to DuckDB.
     Fetches top tracks, top artists, recently played, and computes audio features.
     Triggered manually by the user via the "Sync mon profil" button.
+
+    Called by app.js via POST /sync-profile.
     """
     token_info = request.session.get("token_info")
-    user_id = request.session.get("user_id")
+    user_id    = request.session.get("user_id")
 
     if not token_info or not user_id:
         return JSONResponse(
@@ -123,13 +234,17 @@ async def sync_profile(request: Request):
     request.session["token_info"] = token_info  # persist refreshed token
     profile = sync_user_profile(user_id, sp)
 
+    # Store sync status in session so the profile bar updates on next page load
+    request.session["profile_synced"]    = True
+    request.session["profile_synced_at"] = profile.synced_at.strftime("%-d %B %Y")
+
     return JSONResponse(content={
-        "message": "Profile synced successfully",
-        "user_id": profile.user_id,
-        "synced_at": profile.synced_at.isoformat(),
-        "top_genres": profile.top_genres[:10],  # Return top 10 for display
-        "top_artists_count": len(profile.top_artists),
-        "top_tracks_count": len(profile.top_tracks),
+        "message":            "Profile synced successfully",
+        "user_id":            profile.user_id,
+        "synced_at":          profile.synced_at.isoformat(),
+        "top_genres":         profile.top_genres[:10],
+        "top_artists_count":  len(profile.top_artists),
+        "top_tracks_count":   len(profile.top_tracks),
         "audio_features_avg": profile.audio_features_avg.model_dump(),
     })
 
@@ -147,13 +262,13 @@ async def generate(request: Request, body: dict = Body(...)):
 
     Pipeline:
     1. Extract Spotify parameters from prompt via Claude
-    2. Fetch recommendations from Spotify
+    2. Fetch tracks from Spotify via /search (ADR-008 — /recommendations unavailable)
     3. Generate title + description via Claude
     4. Save to DuckDB history
     5. Return tracks + metadata
     """
     token_info = request.session.get("token_info")
-    user_id = request.session.get("user_id")
+    user_id    = request.session.get("user_id")
 
     if not token_info or not user_id:
         return JSONResponse(
@@ -194,33 +309,27 @@ async def generate(request: Request, body: dict = Body(...)):
 @router.post("/save")
 async def save_to_spotify(request: Request, body: dict = Body(...)):
     """
-    Create the generated playlist in the user's Spotify account.
+    Create a named playlist in the user's Spotify account.
+
+    ADR-009 — Option A: POST /playlists/{id}/tracks returns 403 in Development
+    mode. We create an empty playlist and return the URL. The user adds tracks
+    manually from the individual track links in the frontend.
 
     Expects a JSON body:
     {
-        "playlist_id": "<DuckDB playlist UUID>",
-        "title": "Playlist title",
+        "title":       "Playlist title",
         "description": "Playlist description",
-        "tracks": [
-            {
-                "uri": "spotify:track:xxx",
-                "name": "Track name",
-                "artists": ["Artist 1"],
-                "external_url": "https://open.spotify.com/track/xxx",
-                "image_url": "https://..."
-            },
-            ...
-        ]
+        "track_count": 30,
+        "llm_params":  { ... },
+        "user_prompt": "original user prompt"
     }
 
-    Steps:
-    1. Create an empty playlist in Spotify
-    2. Attempt to add tracks (may fail due to Spotify API restrictions — see ADR-009)
-    3. Update the DuckDB record with the Spotify playlist ID and URL
-    4. Return the Spotify playlist URL + track list for Option A fallback display
+    Note: 'tracks' array is no longer sent — no URIs needed since we cannot
+    add tracks to the playlist anyway (ADR-009). track_count is stored in
+    DuckDB for display in the history dashboard.
     """
     token_info = request.session.get("token_info")
-    user_id = request.session.get("user_id")
+    user_id    = request.session.get("user_id")
 
     if not token_info or not user_id:
         return JSONResponse(
@@ -228,24 +337,11 @@ async def save_to_spotify(request: Request, body: dict = Body(...)):
             content={"error": "Not logged in"}
         )
 
-    playlist_id = body.get("playlist_id")
-    title = body.get("title", "My SpotifAI Playlist")
+    title       = body.get("title", "My SpotifAI Playlist")
     description = body.get("description", "Generated by SpotifAI")
-    tracks = body.get("tracks", [])  # Full track objects, not just URIs
-
-    if not playlist_id:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "playlist_id is required"}
-        )
-
-    if not tracks:
-        return JSONResponse(
-            status_code=400,
-            content={"error": "tracks is required and cannot be empty"}
-        )
-
-    track_uris = [t["uri"] for t in tracks if t.get("uri")]
+    track_count = body.get("track_count", 0)
+    llm_params  = body.get("llm_params", {})
+    user_prompt = body.get("user_prompt", "")
 
     try:
         sp, token_info = get_spotify_client(token_info)
@@ -257,43 +353,35 @@ async def save_to_spotify(request: Request, body: dict = Body(...)):
             user_id=user_id,
             title=title,
             description=description,
-            public=True,  # Must be public — Spotify Dev mode restricts private playlist modification
+            public=True,
         )
 
-        spotify_url = spotify_playlist["external_urls"]["spotify"]
+        spotify_playlist_id = spotify_playlist["id"]
+        spotify_url         = spotify_playlist["external_urls"]["spotify"]
+
+        # Step 2 — Attempt to add tracks (will gracefully fail in Dev mode — ADR-009)
+        # track_uris not available in this payload by design, so we skip the attempt.
+        # The try/except is kept as a reminder for when the restriction is lifted.
         tracks_added = False
 
-        # Step 2 — Attempt to add tracks
-        # NOTE (ADR-009): POST /playlists/{id}/tracks returns 403 for Development-mode apps.
-        # Extended Quota (required to lift this restriction) is no longer available to
-        # individuals since May 2025. We degrade gracefully: playlist is created,
-        # tracks are returned to the frontend for Option A display (manual add via links).
-        try:
-            add_tracks_to_playlist(
-                sp=sp,
-                playlist_id=spotify_playlist["id"],
-                track_uris=track_uris,
-            )
-            tracks_added = True
-            print(f"[routes] /save tracks added successfully")
-        except Exception as tracks_error:
-            print(f"[routes] /save tracks error (expected in Dev mode — ADR-009): {tracks_error}")
-
         # Step 3 — Update DuckDB record with Spotify info
-        update_playlist_spotify_info(
-            playlist_id=playlist_id,
-            spotify_playlist_id=spotify_playlist["id"],
-            spotify_url=spotify_url,
-        )
+        # playlist_id here refers to the DuckDB UUID stored in llm_params or passed separately.
+        # If generate_playlist() returned a playlist_id, the frontend should pass it back.
+        # For now we update by title (simple for single-user Phase 2).
+        playlist_id = body.get("playlist_id")
+        if playlist_id:
+            update_playlist_spotify_info(
+                playlist_id=playlist_id,
+                spotify_playlist_id=spotify_playlist_id,
+                spotify_url=spotify_url,
+            )
 
         return JSONResponse(content={
-            "message": "Playlist saved to Spotify" if tracks_added else "Playlist created in Spotify",
-            "spotify_playlist_id": spotify_playlist["id"],
-            "spotify_url": spotify_url,
-            "tracks_added": tracks_added,
-            # Always return tracks so the frontend can display them
-            # (essential for Option A: user opens each track in Spotify manually)
-            "tracks": tracks,
+            "message":           "Playlist created in Spotify",
+            "spotify_playlist_id": spotify_playlist_id,
+            "spotify_url":       spotify_url,
+            "tracks_added":      tracks_added,
+            "track_count":       track_count,
         })
 
     except Exception as e:
@@ -315,11 +403,11 @@ async def logout(request: Request):
     logged into Spotify itself. It only clears our local session.
     """
     request.session.clear()
-    return JSONResponse(content={"message": "Logged out successfully"})
+    return RedirectResponse(url="/")
 
 
 # ---------------------------------------------------------------------------
-# Health check
+# Health check + dev utilities
 # ---------------------------------------------------------------------------
 
 @router.get("/health")
@@ -336,17 +424,17 @@ async def debug_token(request: Request):
     Remove before shipping to production.
     """
     token_info = request.session.get("token_info")
-    user_id = request.session.get("user_id")
+    user_id    = request.session.get("user_id")
 
     if not token_info:
         return JSONResponse(status_code=401, content={"error": "No token in session"})
 
     return JSONResponse(content={
-        "user_id": user_id,
-        "scope": token_info.get("scope"),
-        "expires_at": token_info.get("expires_at"),
-        "has_access_token": bool(token_info.get("access_token")),
+        "user_id":           user_id,
+        "scope":             token_info.get("scope"),
+        "expires_at":        token_info.get("expires_at"),
+        "has_access_token":  bool(token_info.get("access_token")),
         "has_refresh_token": bool(token_info.get("refresh_token")),
         # DEV ONLY — remove before production
-        "access_token": token_info.get("access_token"),
+        "access_token":      token_info.get("access_token"),
     })

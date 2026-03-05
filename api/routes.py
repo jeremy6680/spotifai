@@ -9,6 +9,8 @@ from fastapi import APIRouter, Request, Body
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 
+from spotipy.exceptions import SpotifyException
+
 from api.spotify import get_auth_manager, get_spotify_client, create_playlist, add_tracks_to_playlist
 from core.profile import sync_user_profile
 from core.generator import generate_playlist
@@ -44,6 +46,42 @@ templates.env.filters["format_date"] = format_date
 # Helper — extract current user info from session
 # Returns a dict the templates can use, or None if not logged in.
 # ---------------------------------------------------------------------------
+
+def get_spotify_or_401(request: Request):
+    """
+    Attempt to build an authenticated Spotify client from the session token.
+
+    Returns a tuple (sp, token_info) on success.
+    Returns a JSONResponse(401) if:
+    - No token in session (user not logged in)
+    - Token refresh failed (token revoked or expired beyond repair)
+
+    Callers should check: if isinstance(result, JSONResponse): return result
+    """
+    token_info = request.session.get("token_info")
+    if not token_info:
+        return JSONResponse(
+            status_code=401,
+            content={"error": "Not logged in", "action": "login"}
+        )
+
+    try:
+        sp, refreshed_token = get_spotify_client(token_info)
+        # Persist the (possibly refreshed) token back into the session
+        request.session["token_info"] = refreshed_token
+        return sp, refreshed_token
+    except Exception as e:
+        print(f"[routes] Spotify token refresh failed: {e}")
+        # Token is irrecoverable — clear session and ask user to log in again
+        request.session.clear()
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "Spotify session expired. Please log in again.",
+                "action": "login"
+            }
+        )
+
 
 def get_current_user(request: Request) -> dict | None:
     """
@@ -221,17 +259,15 @@ async def sync_profile(request: Request):
 
     Called by app.js via POST /sync-profile.
     """
-    token_info = request.session.get("token_info")
-    user_id    = request.session.get("user_id")
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Not logged in", "action": "login"})
 
-    if not token_info or not user_id:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Not logged in"}
-        )
+    spotify_result = get_spotify_or_401(request)
+    if isinstance(spotify_result, JSONResponse):
+        return spotify_result
+    sp, _ = spotify_result
 
-    sp, token_info = get_spotify_client(token_info)
-    request.session["token_info"] = token_info  # persist refreshed token
     profile = sync_user_profile(user_id, sp)
 
     # Store sync status in session so the profile bar updates on next page load
@@ -267,14 +303,14 @@ async def generate(request: Request, body: dict = Body(...)):
     4. Save to DuckDB history
     5. Return tracks + metadata
     """
-    token_info = request.session.get("token_info")
-    user_id    = request.session.get("user_id")
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Not logged in", "action": "login"})
 
-    if not token_info or not user_id:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Not logged in"}
-        )
+    spotify_result = get_spotify_or_401(request)
+    if isinstance(spotify_result, JSONResponse):
+        return spotify_result
+    sp, _ = spotify_result
 
     prompt = body.get("prompt", "").strip()
     if not prompt:
@@ -284,8 +320,6 @@ async def generate(request: Request, body: dict = Body(...)):
         )
 
     try:
-        sp, token_info = get_spotify_client(token_info)
-        request.session["token_info"] = token_info  # persist refreshed token
         result = generate_playlist(user_id, prompt, sp)
         return JSONResponse(content=result)
 
@@ -328,14 +362,14 @@ async def save_to_spotify(request: Request, body: dict = Body(...)):
     add tracks to the playlist anyway (ADR-009). track_count is stored in
     DuckDB for display in the history dashboard.
     """
-    token_info = request.session.get("token_info")
-    user_id    = request.session.get("user_id")
+    user_id = request.session.get("user_id")
+    if not user_id:
+        return JSONResponse(status_code=401, content={"error": "Not logged in", "action": "login"})
 
-    if not token_info or not user_id:
-        return JSONResponse(
-            status_code=401,
-            content={"error": "Not logged in"}
-        )
+    spotify_result = get_spotify_or_401(request)
+    if isinstance(spotify_result, JSONResponse):
+        return spotify_result
+    sp, _ = spotify_result
 
     title       = body.get("title", "My SpotifAI Playlist")
     description = body.get("description", "Generated by SpotifAI")
@@ -344,9 +378,6 @@ async def save_to_spotify(request: Request, body: dict = Body(...)):
     user_prompt = body.get("user_prompt", "")
 
     try:
-        sp, token_info = get_spotify_client(token_info)
-        request.session["token_info"] = token_info  # persist refreshed token
-
         # Step 1 — Create empty playlist in Spotify
         spotify_playlist = create_playlist(
             sp=sp,

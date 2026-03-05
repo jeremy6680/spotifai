@@ -76,36 +76,83 @@ Last updated: 2026-03-05
 - [x] Fix text contrast — `--color-text-muted` and `--color-text-faint` raised to WCAG AA
 - [x] Test: full flow in browser (login → sync → generate → save)
 
+### Step 8 — Polish & docs ✅
+
+- [x] Review all error states (invalid token, API failures, empty results, network errors)
+- [x] Improve Save button discoverability — sticky CTA displayed after generation
+- [x] Add prompt prefill from history page (`?prompt=` query param handled in JS)
+- [x] Write `README.md` — setup, usage, env vars, architecture, known limitations
+- [x] Remove `/debug/token` endpoint (dev-only, removed before final release)
+- [x] Auto-save playlist to DuckDB on generation (no manual save step required)
+- [x] Persist full track list to DuckDB alongside playlist metadata
+- [x] Multi-delete playlists from history dashboard
+- [x] Final end-to-end test
+
 ---
 
-## 🔜 Up Next
+## 🔜 Up Next — Phase 3 (roadmap)
 
-### Step 8 — Polish & docs (branch: `feature/polish`)
+> Phase 2 is complete. The app is fully functional as a single-user personal tool.
+> Phase 3 targets a production-grade, multi-agent, data-pipeline architecture.
 
-- [ ] Review all error states (invalid token, API failures, empty results, network errors)
-- [ ] Improve Save button discoverability — make it more prominent after generation
-- [ ] Add prompt prefill from history page (`?prompt=` query param handled in JS)
-- [ ] Write `README.md` — setup, usage, env vars, architecture, known limitations
-- [ ] Final end-to-end test
+### Step 9 — dbt medallion pipeline
+
+- [ ] Add dbt to the project (install, init, configure DuckDB adapter)
+- [ ] Define bronze layer: raw DuckDB tables as dbt sources
+- [ ] Define silver layer: cleaned + typed models (playlists, tracks, profiles)
+- [ ] Define gold layer: analytical models (genre trends, listening patterns)
+- [ ] Write dbt tests for data quality
+
+### Step 10 — CrewAI multi-agent system
+
+- [ ] Define agent roles: Music Profiler, Criteria Interpreter, Playlist Curator
+- [ ] Migrate `core/prompts.py` templates to CrewAI agent system prompts
+- [ ] Implement agent orchestration replacing `core/generator.py` pipeline
+- [ ] Test: multi-agent generation vs. current single-prompt generation
+
+### Step 11 — Airflow event-driven sync
+
+- [ ] Replace manual `POST /sync-profile` with Airflow DAG
+- [ ] Define polling interval (daily or on-demand trigger)
+- [ ] Test: profile auto-refreshes without user action
+
+### Step 12 — React frontend
+
+- [ ] Scaffold React app (Vite or CRA)
+- [ ] Add `prefix="/api"` to `app.include_router(router)` in `main.py`
+- [ ] Migrate Jinja2 templates to React components
+- [ ] Test: full flow through React frontend
 
 ---
 
 ## ⚠️ Architecture Change
 
-**`/recommendations` endpoint inaccessible** — Spotify restricted this endpoint to apps in Extended Quota Mode (organizations with 250k+ MAUs minimum) since late 2024. SpotifAI uses a `/search` + filtering strategy instead. See ADR-008.
+**`/recommendations` endpoint inaccessible** — Spotify restricted this endpoint to apps
+in Extended Quota Mode (organizations with 250k+ MAUs minimum) since late 2024.
+SpotifAI uses a `/search` + filtering strategy instead. See ADR-008.
 
 ---
 
 ## ⚠️ Spotify API Restriction (ADR-009)
 
-**`POST /playlists/{id}/tracks` blocked in Development mode** — Spotify returns 403 when adding tracks to a playlist for non-approved Extended Quota apps. Extended Quota is no longer available to individuals since May 2025 (organizations only).
+**`POST /playlists/{id}/tracks` blocked in Development mode** — Spotify returns 403
+when adding tracks to a playlist for non-approved Extended Quota apps. Extended Quota
+is no longer available to individuals since May 2025 (organizations only).
 
-Strategy: **Option A** — playlist is created empty in Spotify, frontend displays the track list with an individual "Open in Spotify" link per track. The user can add them manually. The code still attempts the add and degrades gracefully on failure — if Spotify lifts the restriction, it will work without modification.
+Strategy: **Option A** — playlist is created empty in Spotify, frontend displays the
+track list with an individual "Open in Spotify" link per track. The user can add them
+manually. The code still attempts the add and degrades gracefully on failure — if
+Spotify lifts the restriction, it will work without modification.
 
 ---
 
 ## 🐛 Known Issues
 
-- **Empty Spotify genres**: `current_user_top_artists` returns `genres: []` for all artists (Spotify API degradation, March 2026). Workaround: genres inferred by LLM from artist names. See ADR-007.
-- **Audio features unavailable**: Spotify deprecated this endpoint for new tracks in 2024. `audio_features_avg` returns default values (0.5). Profile relies solely on artists and tracks for LLM context.
-- **Low track count on some queries**: `/search`-based strategy can return fewer than 30 tracks for niche genres (observed: 14 tracks for a punk 90s query). Improving query diversity in `core/prompts.py` is a Step 8 polish item.
+- **Empty Spotify genres**: `current_user_top_artists` returns `genres: []` for all
+  artists (Spotify API degradation, March 2026). Workaround: genres inferred by LLM
+  from artist names. See ADR-007.
+- **Audio features unavailable**: Spotify deprecated this endpoint for new tracks in 2024. `audio_features_avg` returns default values (0.5). Profile relies solely on
+  artists and tracks for LLM context.
+- **Low track count on some queries**: `/search`-based strategy can return fewer than
+  30 tracks for niche genres (observed: 14 tracks for a punk 90s query). Improving
+  query diversity in `core/prompts.py` is a Phase 3 item.

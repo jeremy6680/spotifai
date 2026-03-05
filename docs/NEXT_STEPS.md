@@ -1,6 +1,6 @@
 # SpotifAI — Next Steps
 
-Last updated: 2026-03-04
+Last updated: 2026-03-05
 
 ---
 
@@ -53,11 +53,14 @@ Last updated: 2026-03-04
 - [ ] Implement `POST /generate` route
 - [ ] Test: full generation pipeline end-to-end
 
-### Step 6 — Save to Spotify (branch: `feature/save-playlist`)
-- [ ] Implement `api/spotify.py` — `create_playlist()`, `add_tracks_to_playlist()`
-- [ ] Implement `db/queries.py` — `save_playlist()`
-- [ ] Implement `POST /save` route
-- [ ] Test: playlist appears in user's Spotify account
+### Step 6 — Save to Spotify (branch: `feature/save-playlist`) ✅
+- [x] Implement `api/spotify.py` — `create_playlist()`, `add_tracks_to_playlist()`
+- [x] Implement `db/queries.py` — `update_playlist_spotify_info()`
+- [x] Implement `POST /save` route
+- [x] Fix token refresh not persisted to session (intermittent 403)
+- [x] Fix `POST /users/{id}/playlists` → migrated to `POST /me/playlists` (ADR-009)
+- [x] Graceful degradation : playlist créée, tracks retournées pour Option A
+- [x] Test : playlist apparaît dans le compte Spotify de l'utilisateur
 
 ### Step 7 — Frontend (branch: `feature/frontend`)
 - [ ] Create `templates/index.html` — prompt form + results display
@@ -76,6 +79,14 @@ Last updated: 2026-03-04
 ## ⚠️ Architecture Change
 
 **`/recommendations` endpoint inaccessible** — Spotify a restreint cet endpoint aux apps en Extended Quota Mode (organisations avec 250k MAUs minimum) depuis fin 2024. SpotifAI utilise à la place une stratégie de recherche via `/search` + filtrage. Voir ADR-008.
+
+---
+
+## ⚠️ Spotify API Restriction (ADR-009)
+
+**`POST /playlists/{id}/tracks` bloqué en Development mode** — Spotify retourne 403 sur l'ajout de tracks à une playlist pour les apps non approuvées Extended Quota. L'Extended Quota n'est plus disponible aux individus depuis mai 2025 (organisations uniquement).
+
+Stratégie retenue : **Option A** — la playlist est créée vide dans Spotify, et le frontend affiche la liste des tracks avec un lien "Ouvrir dans Spotify" par morceau. L'utilisateur peut les ajouter manuellement. Le code tente toujours l'ajout automatique et se dégrade gracieusement si ça échoue — le jour où Spotify lève la restriction, ça fonctionnera sans modification.
 
 ---
 

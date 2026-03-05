@@ -141,6 +141,25 @@ def get_playlist_history(user_id: str) -> list[Playlist]:
     return playlists
 
 
+def update_playlist_spotify_info(
+    playlist_id: str,
+    spotify_playlist_id: str,
+    spotify_url: str,
+) -> None:
+    """
+    Update an existing playlist record with its Spotify playlist ID and URL.
+    Called after the playlist has been successfully created in Spotify.
+    """
+    conn = get_connection()
+    conn.execute("""
+        UPDATE playlists
+        SET spotify_playlist_id = ?,
+            spotify_url = ?
+        WHERE id = ?
+    """, [spotify_playlist_id, spotify_url, playlist_id])
+    conn.close()
+
+
 def get_playlist_by_id(playlist_id: str) -> Playlist | None:
     """
     Retrieve a single playlist by its ID.

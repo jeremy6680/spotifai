@@ -87,8 +87,8 @@ def save_playlist(playlist: PlaylistCreate, user_id: str) -> Playlist:
     conn.execute("""
         INSERT INTO playlists
             (id, created_at, user_prompt, llm_params,
-             spotify_playlist_id, spotify_url, title, track_count)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             spotify_playlist_id, spotify_url, title, track_count, tracks)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, [
         playlist_id,
         created_at,
@@ -98,6 +98,7 @@ def save_playlist(playlist: PlaylistCreate, user_id: str) -> Playlist:
         playlist.spotify_url,
         playlist.title,
         playlist.track_count,
+        json.dumps(playlist.tracks),
     ])
 
     conn.close()
@@ -117,7 +118,7 @@ def get_playlist_history(user_id: str) -> list[Playlist]:
 
     results = conn.execute("""
         SELECT id, created_at, user_prompt, llm_params,
-               spotify_playlist_id, spotify_url, title, track_count
+               spotify_playlist_id, spotify_url, title, track_count, tracks
         FROM playlists
         ORDER BY created_at DESC
     """).fetchall()
@@ -136,6 +137,7 @@ def get_playlist_history(user_id: str) -> list[Playlist]:
             spotify_url=row[5],
             title=row[6],
             track_count=row[7],
+            tracks=json.loads(row[8]) if row[8] else [],
         ))
 
     return playlists
@@ -160,6 +162,29 @@ def update_playlist_spotify_info(
     conn.close()
 
 
+def delete_playlists(ids: list[str]) -> int:
+    """
+    Delete playlists by a list of UUIDs.
+    Returns the number of rows deleted.
+    Only deletes from DuckDB — does not touch the Spotify playlist.
+    """
+    if not ids:
+        return 0
+
+    conn = get_connection()
+
+    # Build a parameterised IN clause: DELETE ... WHERE id IN (?, ?, ?)
+    placeholders = ", ".join(["?"] * len(ids))
+    conn.execute(
+        f"DELETE FROM playlists WHERE id IN ({placeholders})",
+        ids,
+    )
+
+    # DuckDB doesn't expose rowcount directly — we return len(ids) as a proxy
+    conn.close()
+    return len(ids)
+
+
 def get_playlist_by_id(playlist_id: str) -> Playlist | None:
     """
     Retrieve a single playlist by its ID.
@@ -169,7 +194,7 @@ def get_playlist_by_id(playlist_id: str) -> Playlist | None:
 
     row = conn.execute("""
         SELECT id, created_at, user_prompt, llm_params,
-               spotify_playlist_id, spotify_url, title, track_count
+               spotify_playlist_id, spotify_url, title, track_count, tracks
         FROM playlists
         WHERE id = ?
     """, [playlist_id]).fetchone()
@@ -189,4 +214,5 @@ def get_playlist_by_id(playlist_id: str) -> Playlist | None:
         spotify_url=row[5],
         title=row[6],
         track_count=row[7],
+        tracks=json.loads(row[8]) if row[8] else [],
     )

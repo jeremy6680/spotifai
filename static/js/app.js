@@ -696,13 +696,15 @@ async function handleSave() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                title: state.currentPlaylist.title,
+                title:       state.currentPlaylist.title,
                 description: state.currentPlaylist.description,
                 // track_count stored in DuckDB for history display — no URIs needed
                 track_count: state.currentPlaylist.tracks.length,
                 // LLM params + original prompt for DuckDB persistence
-                llm_params: state.currentPlaylist.llm_params,
+                llm_params:  state.currentPlaylist.llm_params,
                 user_prompt: dom.promptInput ? dom.promptInput.value.trim() : '',
+                // playlist_id is the DuckDB UUID — required to update spotify_url after save
+                playlist_id: state.currentPlaylist.playlist_id,
             }),
         });
 

@@ -83,11 +83,14 @@ class PlaylistCreate(BaseModel):
     Data required to save a new playlist to DuckDB.
     spotify_playlist_id and spotify_url are optional — the user may not
     have saved the playlist to their Spotify account yet.
+    tracks stores the full track list as returned by the Spotify search —
+    used to display previously generated tracks on the home page.
     """
     user_prompt: str
     llm_params: LLMCriteriaOutput
     title: str
     track_count: int
+    tracks: list[dict] = Field(default_factory=list)
     spotify_playlist_id: Optional[str] = None
     spotify_url: Optional[str] = None
 

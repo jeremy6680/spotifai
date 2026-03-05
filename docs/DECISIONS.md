@@ -1,6 +1,6 @@
 # SpotifAI — Architecture Decisions
 
-Last updated: 2026-03-05
+Last updated: 2026-03-05 (ADR-011 added)
 
 ---
 
@@ -210,3 +210,35 @@ Since May 2025, Spotify no longer accepts Extended Quota requests from individua
 **Trade-off:** If a public API layer is ever needed (e.g. for the Phase 3 React frontend consuming the same backend), adding a prefix at that point is a one-line change in `main.py` + a JS update.
 
 **Phase 3 impact:** When replacing Jinja2 with React, add `prefix="/api"` to `app.include_router(router)` in `main.py` and update fetch calls accordingly.
+
+---
+
+## ADR-011 — Deployment on Coolify + Hetzner
+
+**Date:** 2026-03-05  
+**Status:** Accepted
+
+**Context:** Need a publicly accessible demo URL to present the project.
+
+**Decision:** Deploy SpotifAI on a self-hosted Coolify instance running on Hetzner, using a `Dockerfile` (multi-stage build) as the build pack.
+
+**Rationale:**
+
+- Coolify + Hetzner was already in use — zero additional infrastructure cost
+- Coolify handles SSL (Let's Encrypt), reverse proxy (Traefik), and GitHub webhook-based auto-deploy
+- Docker multi-stage build keeps the image lean (~200 MB)
+- DuckDB data persisted via a Coolify-managed named volume mounted at `/app/data`
+- Demo URL: https://spotifai.lumafinch.com
+
+**Key configuration:**
+- Build pack: `Dockerfile`
+- Exposed port: `8000`
+- Volume: `/app/data` (DuckDB persistence)
+- All credentials injected via Coolify environment variables — never baked into the image
+- `SPOTIFY_REDIRECT_URI` updated to `https://spotifai.lumafinch.com/callback` in both Coolify env vars and Spotify Developer Dashboard
+
+**Spotify Development mode constraint:** The demo is limited to 25 whitelisted users. Access requires manual email registration in the Spotify Developer Dashboard.
+
+**Files added:** `Dockerfile`, `.dockerignore`, `docker-compose.yml` (local testing only)
+
+**Phase 3 impact:** The `Dockerfile` and `docker-compose.yml` are the foundation for the Phase 3 open-source release (CDC section 8.5). GitHub Actions CI/CD can be added on top without changes to the Docker setup.

@@ -6,6 +6,15 @@
 
 ---
 
+## 🎙️ Live Demo
+
+**[spotifai.lumafinch.com](https://spotifai.lumafinch.com)**
+
+> SpotifAI is currently in **Spotify Development mode**, which limits access to 25 whitelisted users.
+> To try the demo, send your Spotify account email to [hey@jeremymarchandeau.com](mailto:hey@jeremymarchandeau.com) and I’ll add you.
+
+---
+
 ## What it does
 
 SpotifAI breaks Spotify's filter bubble by letting you generate playlists from free-text descriptions:
@@ -191,6 +200,25 @@ This project is designed to evolve. Phase 2 (this version) is a functional singl
 - **Open-source release** — Docker, GitHub Actions, full documentation
 
 Full roadmap in [`docs/SpotifAI_CDC_v2.md`](docs/SpotifAI_CDC_v2.md).
+
+---
+
+## Deployment
+
+SpotifAI is deployed via Docker on a self-hosted [Coolify](https://coolify.io) instance (Hetzner).
+
+```bash
+# Build and run locally with Docker Compose
+docker compose up --build
+```
+
+For production deployment:
+- Build pack: `Dockerfile` (multi-stage, `python:3.11-slim`)
+- Exposed port: `8000`
+- Persistent volume: `/app/data` (DuckDB file)
+- All credentials injected via environment variables — never baked into the image
+
+See `Dockerfile` and `docker-compose.yml` at the project root.
 
 ---
 

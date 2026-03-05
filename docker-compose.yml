@@ -1,0 +1,28 @@
+# docker-compose.yml
+# For local testing only — Coolify manages its own volumes and env vars
+
+version: "3.9"
+
+services:
+  spotifai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    # Map container port 8000 to host port 8000
+    ports:
+      - "8000:8000"
+
+    # Load environment variables from .env (not baked into the image)
+    env_file:
+      - .env
+
+    # Persist DuckDB data across container restarts
+    volumes:
+      - spotifai_data:/app/data
+
+    restart: unless-stopped
+
+# Named volume managed by Docker — survives container restarts
+volumes:
+  spotifai_data:

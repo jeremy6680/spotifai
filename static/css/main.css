@@ -1,0 +1,1213 @@
+/* ==========================================================================
+   SpotifAI — main.css
+   Dark premium music theme
+   Author: Jeremy Marchandeau
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. CSS Custom Properties (Design Tokens)
+   -------------------------------------------------------------------------- */
+:root {
+  /* Colors */
+  --color-bg: #0a0a0a;
+  --color-bg-surface: #111111;
+  --color-bg-raised: #1a1a1a;
+  --color-bg-overlay: #222222;
+
+  --color-accent: #1db954; /* Spotify green */
+  --color-accent-dim: #17a349;
+  --color-accent-glow: rgba(29, 185, 84, 0.15);
+
+  --color-text: #f0f0f0;
+  --color-text-muted: #aaaaaa; /* was #888 — raised for WCAG AA on dark bg */
+  --color-text-faint: #777777; /* was #444 — raised for WCAG AA on dark bg */
+
+  --color-border: #2a2a2a;
+  --color-border-focus: #1db954;
+
+  --color-error: #e05260;
+  --color-success: #1db954;
+
+  /* Typography */
+  --font-display: "DM Serif Display", Georgia, serif;
+  --font-body: "DM Mono", "Courier New", monospace;
+  --font-ui: "DM Sans", system-ui, sans-serif;
+
+  /* Spacing scale (base 8px) */
+  --space-1: 0.25rem; /*  4px */
+  --space-2: 0.5rem; /*  8px */
+  --space-3: 0.75rem; /* 12px */
+  --space-4: 1rem; /* 16px */
+  --space-5: 1.5rem; /* 24px */
+  --space-6: 2rem; /* 32px */
+  --space-8: 3rem; /* 48px */
+  --space-10: 4rem; /* 64px */
+
+  /* Layout */
+  --max-width: 900px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 250ms ease;
+  --transition-slow: 400ms ease;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.6);
+  --shadow-glow: 0 0 24px var(--color-accent-glow);
+}
+
+/* --------------------------------------------------------------------------
+   2. Reset & Base
+   -------------------------------------------------------------------------- */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.6;
+  min-height: 100vh;
+  /* Subtle grain texture via SVG data URI */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23noise)' opacity='0.025'/%3E%3C/svg%3E");
+}
+
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+a:hover {
+  color: var(--color-text);
+  opacity: 0.9;
+}
+
+/* Focus visible — accessibility priority */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: var(--radius-sm);
+}
+
+/* --------------------------------------------------------------------------
+   3. Typography
+   -------------------------------------------------------------------------- */
+
+/* Import Google Fonts — place in HTML <head> for performance */
+/* @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&family=DM+Serif+Display&display=swap'); */
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+}
+h2 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+}
+h3 {
+  font-size: 1.25rem;
+}
+h4 {
+  font-size: 1rem;
+}
+
+p {
+  margin-bottom: var(--space-4);
+}
+p:last-child {
+  margin-bottom: 0;
+}
+
+code,
+kbd,
+.mono {
+  font-family: var(--font-body);
+  font-size: 0.875em;
+}
+
+/* --------------------------------------------------------------------------
+   4. Layout
+   -------------------------------------------------------------------------- */
+
+.container {
+  width: 100%;
+  max-width: var(--max-width);
+  margin-inline: auto;
+  padding-inline: var(--space-5);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+/* --------------------------------------------------------------------------
+   5. Header / Nav
+   -------------------------------------------------------------------------- */
+
+.site-header {
+  border-bottom: 1px solid var(--color-border);
+  padding-block: var(--space-5);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.site-logo {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--color-text);
+  letter-spacing: -0.03em;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.site-logo span {
+  color: var(--color-accent);
+}
+
+.site-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.site-nav a {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: color var(--transition-fast);
+}
+
+.site-nav a:hover,
+.site-nav a[aria-current="page"] {
+  color: var(--color-accent);
+}
+
+/* User badge (shown after login) */
+.user-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.user-badge img {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  object-fit: cover;
+}
+
+/* --------------------------------------------------------------------------
+   6. Main Content
+   -------------------------------------------------------------------------- */
+
+.page-main {
+  padding-block: var(--space-10);
+}
+
+/* Hero section — above the generator form */
+.hero {
+  text-align: center;
+  margin-bottom: var(--space-10);
+}
+
+.hero__eyebrow {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  margin-bottom: var(--space-3);
+  display: block;
+}
+
+.hero__title {
+  margin-bottom: var(--space-4);
+}
+
+.hero__subtitle {
+  color: var(--color-text-muted);
+  font-size: 1.1rem;
+  max-width: 540px;
+  margin-inline: auto;
+  margin-bottom: 0;
+}
+
+/* --------------------------------------------------------------------------
+   7. Generator Card (main form area)
+   -------------------------------------------------------------------------- */
+
+.generator-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle accent line top */
+.generator-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-accent),
+    transparent
+  );
+  opacity: 0.6;
+}
+
+.generator-card__label {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-3);
+  display: block;
+}
+
+/* --------------------------------------------------------------------------
+   8. Form Elements
+   -------------------------------------------------------------------------- */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-family: var(--font-ui);
+}
+
+.prompt-textarea {
+  width: 100%;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: var(--font-ui);
+  font-size: 1rem;
+  line-height: 1.6;
+  padding: var(--space-4) var(--space-5);
+  resize: vertical;
+  min-height: 100px;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.prompt-textarea::placeholder {
+  color: var(--color-text-faint);
+  font-style: italic;
+}
+
+.prompt-textarea:focus {
+  border-color: var(--color-border-focus);
+  box-shadow: 0 0 0 3px var(--color-accent-glow);
+  outline: none;
+}
+
+/* Hint below textarea */
+.form-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.form-hint strong {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+/* Prompt suggestion chips */
+.prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.chip {
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  padding: var(--space-1) var(--space-3);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.chip:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-accent-glow);
+}
+
+/* --------------------------------------------------------------------------
+   9. Buttons
+   -------------------------------------------------------------------------- */
+
+.btn {
+  align-items: center;
+  border: none;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--font-ui);
+  font-size: 0.9rem;
+  font-weight: 600;
+  gap: var(--space-2);
+  justify-content: center;
+  letter-spacing: 0.02em;
+  padding: var(--space-3) var(--space-6);
+  position: relative;
+  text-decoration: none;
+  transition: all var(--transition-base);
+  white-space: nowrap;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+}
+
+/* Primary — filled green */
+.btn--primary {
+  background: var(--color-accent);
+  color: #000;
+}
+
+.btn--primary:hover:not(:disabled) {
+  background: var(--color-accent-dim);
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+  color: #000;
+}
+
+.btn--primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+/* Ghost — outlined */
+.btn--ghost {
+  background: transparent;
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* Icon-only button */
+.btn--icon {
+  padding: var(--space-2);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+}
+
+/* Disabled state */
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Loading state — spinner inside button */
+.btn--loading .btn__text {
+  opacity: 0;
+}
+.btn--loading::after {
+  content: "";
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Form footer — row with button + context */
+.form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-top: var(--space-5);
+}
+
+.form-footer__meta {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+  font-family: var(--font-body);
+}
+
+/* --------------------------------------------------------------------------
+   10. Profile Sync Bar
+   -------------------------------------------------------------------------- */
+
+.profile-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  background: var(--color-bg-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-5);
+  flex-wrap: wrap;
+}
+
+.profile-bar__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.profile-bar__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-faint);
+  flex-shrink: 0;
+}
+
+.profile-bar__dot--synced {
+  background: var(--color-accent);
+  box-shadow: 0 0 6px var(--color-accent);
+  animation: pulse-dot 2s ease infinite;
+}
+
+.profile-bar__dot--pending {
+  background: #f0a500;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.profile-bar__text {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+}
+
+.profile-bar__text strong {
+  color: var(--color-text);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   11. Status / Alerts
+   -------------------------------------------------------------------------- */
+
+.alert {
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-size: 0.875rem;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.alert--error {
+  background: rgba(224, 82, 96, 0.08);
+  border-color: rgba(224, 82, 96, 0.3);
+  color: #e05260;
+}
+
+.alert--success {
+  background: var(--color-accent-glow);
+  border-color: rgba(29, 185, 84, 0.3);
+  color: var(--color-accent);
+}
+
+.alert--info {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: var(--color-border);
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   12. Loading State (generation in progress)
+   -------------------------------------------------------------------------- */
+
+.generation-status {
+  text-align: center;
+  padding-block: var(--space-8);
+  display: none; /* shown via JS when generating */
+}
+
+.generation-status.is-visible {
+  display: block;
+  animation: fadeIn var(--transition-slow) ease forwards;
+}
+
+.generation-status__spinner {
+  width: 48px;
+  height: 48px;
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-inline: auto;
+  margin-bottom: var(--space-5);
+}
+
+.generation-status__step {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  min-height: 1.4em;
+  transition: opacity var(--transition-base);
+}
+
+/* --------------------------------------------------------------------------
+   13. Results Section
+   -------------------------------------------------------------------------- */
+
+.results-section {
+  display: none;
+}
+
+.results-section.is-visible {
+  display: block;
+  animation: slideUp var(--transition-slow) ease forwards;
+}
+
+.results-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-5);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-6);
+}
+
+.results-header__meta {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+}
+
+.results-header__meta span {
+  color: var(--color-text-muted);
+}
+
+.results-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+/* Playlist description block */
+.playlist-description {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-accent);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  font-style: italic;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-6);
+  font-size: 0.95rem;
+}
+
+/* --------------------------------------------------------------------------
+   14. Track List
+   -------------------------------------------------------------------------- */
+
+.track-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px; /* ultra tight — feels like a real music player */
+}
+
+.track-item {
+  display: grid;
+  grid-template-columns: 2rem 48px 1fr auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  transition: background var(--transition-fast);
+  cursor: default;
+}
+
+.track-item:hover {
+  background: var(--color-bg-raised);
+}
+
+/* Track number / play icon */
+.track-item__num {
+  color: var(--color-text-faint);
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  text-align: center;
+  transition: opacity var(--transition-fast);
+}
+
+.track-item:hover .track-item__num {
+  opacity: 0;
+}
+
+/* Play icon appears on hover (CSS only) */
+.track-item__play {
+  display: none;
+  color: var(--color-text);
+  font-size: 0.9rem;
+}
+
+.track-item:hover .track-item__num + .track-item__play,
+.track-item:hover .track-item__play {
+  display: block;
+}
+
+/* Wrapper for both num + icon in same grid cell */
+.track-item__index {
+  position: relative;
+  width: 2rem;
+  text-align: center;
+}
+
+.track-item__index .icon-play {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+}
+
+.track-item:hover .track-item__index .icon-play {
+  display: flex;
+}
+
+.track-item:hover .track-item__index .track-num {
+  visibility: hidden;
+}
+
+/* Track artwork */
+.track-item__art {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  background: var(--color-bg-raised);
+  flex-shrink: 0;
+}
+
+.track-item__art--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-faint);
+  font-size: 1.2rem;
+}
+
+/* Track info */
+.track-item__info {
+  overflow: hidden;
+}
+
+.track-item__name {
+  color: var(--color-text);
+  font-weight: 500;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+
+.track-item__artist {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  margin-top: 2px;
+}
+
+/* Track meta (duration + link) */
+.track-item__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.track-item__duration {
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  min-width: 3ch;
+  text-align: right;
+}
+
+/* Spotify open link — always green, always visible */
+.track-item__link {
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  opacity: 0.5; /* subtle at rest, fully visible on hover */
+  transition:
+    opacity var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.track-item:hover .track-item__link {
+  opacity: 1;
+}
+
+.track-item__link:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+/* Preview audio indicator */
+.track-item__preview {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.track-item:hover .track-item__preview {
+  opacity: 1;
+}
+
+/* Animated bars for preview playing */
+.preview-bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--color-accent);
+  transition: height var(--transition-fast);
+}
+
+.preview-bar:nth-child(1) {
+  height: 8px;
+  animation: eq 0.8s ease infinite;
+}
+.preview-bar:nth-child(2) {
+  height: 14px;
+  animation: eq 0.8s ease infinite 0.15s;
+}
+.preview-bar:nth-child(3) {
+  height: 6px;
+  animation: eq 0.8s ease infinite 0.3s;
+}
+
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.4);
+  }
+}
+
+/* Tracks are paused by default — only animate when .is-playing */
+.preview-bar {
+  animation-play-state: paused;
+}
+.track-item.is-playing .preview-bar {
+  animation-play-state: running;
+}
+
+/* --------------------------------------------------------------------------
+   15. Spotify Save Banner
+   -------------------------------------------------------------------------- */
+
+.save-banner {
+  display: none; /* shown after playlist saved to Spotify */
+  background: var(--color-accent-glow);
+  border: 1px solid rgba(29, 185, 84, 0.25);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5) var(--space-6);
+  text-align: center;
+  margin-top: var(--space-6);
+}
+
+.save-banner.is-visible {
+  display: block;
+  animation: fadeIn var(--transition-slow) ease forwards;
+}
+
+.save-banner__title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  margin-bottom: var(--space-2);
+}
+
+.save-banner__sub {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+
+/* --------------------------------------------------------------------------
+   16. History Dashboard (history.html)
+   -------------------------------------------------------------------------- */
+
+.history-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-5);
+}
+
+.history-card {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  transition:
+    border-color var(--transition-base),
+    transform var(--transition-base);
+  cursor: pointer;
+}
+
+.history-card:hover {
+  border-color: var(--color-accent);
+  transform: translateY(-2px);
+}
+
+.history-card__date {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  color: var(--color-text-faint);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-3);
+}
+
+.history-card__title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  margin-bottom: var(--space-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-card__prompt {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: var(--space-4);
+}
+
+.history-card__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.history-card__count {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+}
+
+/* --------------------------------------------------------------------------
+   17. Empty States
+   -------------------------------------------------------------------------- */
+
+.empty-state {
+  text-align: center;
+  padding: var(--space-10) var(--space-5);
+}
+
+.empty-state__icon {
+  font-size: 3rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.3;
+}
+
+.empty-state__title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  margin-bottom: var(--space-3);
+  color: var(--color-text-muted);
+}
+
+.empty-state__text {
+  font-size: 0.9rem;
+  color: var(--color-text-faint);
+  max-width: 360px;
+  margin-inline: auto;
+}
+
+/* --------------------------------------------------------------------------
+   18. Footer
+   -------------------------------------------------------------------------- */
+
+.site-footer {
+  border-top: 1px solid var(--color-border);
+  padding-block: var(--space-6);
+  text-align: center;
+}
+
+.site-footer p {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: var(--color-text-faint);
+  margin: 0;
+  letter-spacing: 0.06em;
+}
+
+.site-footer a {
+  color: var(--color-text-faint);
+}
+
+.site-footer a:hover {
+  color: var(--color-accent);
+}
+
+/* --------------------------------------------------------------------------
+   19. Utility Classes
+   -------------------------------------------------------------------------- */
+
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.text-accent {
+  color: var(--color-accent);
+}
+.text-muted {
+  color: var(--color-text-muted);
+}
+.text-faint {
+  color: var(--color-text-faint);
+}
+.text-mono {
+  font-family: var(--font-body);
+}
+.text-center {
+  text-align: center;
+}
+.text-sm {
+  font-size: 0.875rem;
+}
+.text-xs {
+  font-size: 0.75rem;
+}
+
+.mt-auto {
+  margin-top: auto;
+}
+.ml-auto {
+  margin-left: auto;
+}
+
+.is-hidden {
+  display: none !important;
+}
+.is-visible {
+  display: block;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin-block: var(--space-6);
+}
+
+/* --------------------------------------------------------------------------
+   20. Animations
+   -------------------------------------------------------------------------- */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Staggered item reveal — applied via JS adding .is-visible per item */
+.track-item {
+  animation: slideUp var(--transition-base) ease both;
+}
+
+/* Reduce motion — respect OS preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   21. Responsive
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 600px) {
+  .generator-card {
+    padding: var(--space-5);
+  }
+
+  .results-header {
+    flex-direction: column;
+  }
+
+  .results-actions {
+    width: 100%;
+  }
+
+  .results-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .track-item {
+    grid-template-columns: 1.5rem 40px 1fr auto;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .track-item__art {
+    width: 40px;
+    height: 40px;
+  }
+
+  .track-item__duration {
+    display: none;
+  }
+
+  .site-nav a:not([aria-current]) {
+    display: none;
+  }
+
+  .profile-bar {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .history-grid {
+    grid-template-columns: 1fr;
+  }
+}

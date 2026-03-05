@@ -12,10 +12,10 @@
 
 import spotipy
 
-from api.spotify import search_tracks
+from api.spotify import search_tracks, create_playlist
 from api.llm import extract_criteria, generate_search_queries, generate_playlist_title
 from core.prompts import build_criteria_extraction_prompt, build_search_queries_prompt, build_title_generation_prompt
-from db.queries import get_user_profile, save_playlist
+from db.queries import get_user_profile, save_playlist, update_playlist_spotify_info
 from db.models import PlaylistCreate
 
 
@@ -78,7 +78,7 @@ def generate_playlist(
     print(f"[generator] Title: '{title}' — Description: '{description}'")
 
     # -------------------------------------------------------------------------
-    # Step 5 — Save to DuckDB history
+    # Step 5 — Save to DuckDB history (including full track list)
     # -------------------------------------------------------------------------
     playlist_record = save_playlist(
         PlaylistCreate(
@@ -86,19 +86,53 @@ def generate_playlist(
             llm_params=criteria,
             title=title,
             track_count=len(tracks),
+            tracks=tracks,  # persist full track list for history display
         ),
         user_id=user_id,
     )
     print(f"[generator] Saved to DuckDB — playlist ID: {playlist_record.id}")
 
     # -------------------------------------------------------------------------
-    # Step 6 — Return result
+    # Step 6 — Auto-save to Spotify (replaces manual save button flow)
+    # Creates an empty playlist in the user's account immediately.
+    # ADR-009: adding tracks returns 403 in Development mode — skipped.
+    # -------------------------------------------------------------------------
+    spotify_url = None
+    spotify_playlist_id = None
+
+    try:
+        spotify_playlist = create_playlist(
+            sp=sp,
+            user_id=user_id,
+            title=title,
+            description=description,
+            public=True,
+        )
+        spotify_playlist_id = spotify_playlist["id"]
+        spotify_url = spotify_playlist["external_urls"]["spotify"]
+
+        # Update DuckDB record with Spotify link
+        update_playlist_spotify_info(
+            playlist_id=playlist_record.id,
+            spotify_playlist_id=spotify_playlist_id,
+            spotify_url=spotify_url,
+        )
+        print(f"[generator] Auto-saved to Spotify: {spotify_url}")
+
+    except Exception as e:
+        # Non-fatal — playlist is still saved in DuckDB, just not in Spotify
+        print(f"[generator] Auto-save to Spotify failed (non-fatal): {e}")
+
+    # -------------------------------------------------------------------------
+    # Step 7 — Return result
     # -------------------------------------------------------------------------
     return {
-        "playlist_id": playlist_record.id,
-        "title": title,
-        "description": description,
-        "track_count": len(tracks),
-        "tracks": tracks,
-        "llm_params": criteria.model_dump(),
+        "playlist_id":        playlist_record.id,
+        "title":              title,
+        "description":        description,
+        "track_count":        len(tracks),
+        "tracks":             tracks,
+        "llm_params":         criteria.model_dump(),
+        "spotify_url":        spotify_url,          # None if auto-save failed
+        "spotify_playlist_id": spotify_playlist_id,
     }

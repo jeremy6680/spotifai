@@ -46,8 +46,18 @@ def init_db() -> None:
             spotify_playlist_id TEXT,
             spotify_url         TEXT,
             title               TEXT,
-            track_count         INTEGER
+            track_count         INTEGER,
+            tracks              JSON
         )
     """)
+
+    # Migration: add 'tracks' column to existing databases that predate this change.
+    # ALTER TABLE ... ADD COLUMN IF NOT EXISTS is not supported in DuckDB — we use
+    # a try/except instead. Safe to run every startup.
+    try:
+        conn.execute("ALTER TABLE playlists ADD COLUMN tracks JSON")
+        print("[db] Migration: added 'tracks' column to playlists table")
+    except Exception:
+        pass  # Column already exists — normal after first migration
 
     conn.close()

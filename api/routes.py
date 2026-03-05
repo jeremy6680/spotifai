@@ -14,7 +14,7 @@ from spotipy.exceptions import SpotifyException
 from api.spotify import get_auth_manager, get_spotify_client, create_playlist, add_tracks_to_playlist
 from core.profile import sync_user_profile
 from core.generator import generate_playlist
-from db.queries import update_playlist_spotify_info, get_playlist_history
+from db.queries import update_playlist_spotify_info, get_playlist_history, get_playlist_by_id, delete_playlists
 
 router = APIRouter()
 
@@ -117,15 +117,31 @@ async def index(request: Request):
     profile_synced_at = request.session.get("profile_synced_at", "")
 
     # Pre-fill the prompt textarea if redirected from history page
-    # e.g. /  ?prompt=Post-rock+instrumental
+    # e.g. /?prompt=Post-rock+instrumental&playlist_id=abc-123
     prefill_prompt = request.query_params.get("prompt", "")
+    prefill_playlist_id = request.query_params.get("playlist_id", "")
+
+    # Load previous tracks if a playlist_id is provided
+    # Used to show "previously generated tracks" section under the form
+    prefill_tracks = []
+    prefill_title = ""
+    if prefill_playlist_id:
+        try:
+            prev = get_playlist_by_id(prefill_playlist_id)
+            if prev:
+                prefill_tracks = prev.tracks
+                prefill_title = prev.title
+        except Exception as e:
+            print(f"[routes] Failed to load prefill tracks: {e}")
 
     return templates.TemplateResponse("index.html", {
-        "request":          request,   # required by Jinja2Templates
-        "current_user":     current_user,
-        "profile_synced":   profile_synced,
-        "profile_synced_at": profile_synced_at,
-        "prefill_prompt":   prefill_prompt,
+        "request":            request,
+        "current_user":       current_user,
+        "profile_synced":     profile_synced,
+        "profile_synced_at":  profile_synced_at,
+        "prefill_prompt":     prefill_prompt,
+        "prefill_tracks":     prefill_tracks,   # list of track dicts, or []
+        "prefill_title":      prefill_title,    # playlist title for the section header
     })
 
 
@@ -424,6 +440,33 @@ async def save_to_spotify(request: Request, body: dict = Body(...)):
             status_code=500,
             content={"error": str(e), "type": type(e).__name__}
         )
+
+
+@router.delete("/playlists")
+async def delete_playlists_route(request: Request, body: dict = Body(...)):
+    """
+    Delete one or more playlists from DuckDB by ID.
+
+    Expects: { "ids": ["uuid1", "uuid2", ...] }
+
+    Note: this only deletes from local DuckDB history.
+    The Spotify playlist (if it exists) is NOT deleted — Spotify's API
+    requires user confirmation via their own app for playlist deletion.
+    """
+    current_user = get_current_user(request)
+    if not current_user:
+        return JSONResponse(status_code=401, content={"error": "Not logged in", "action": "login"})
+
+    ids = body.get("ids", [])
+    if not ids or not isinstance(ids, list):
+        return JSONResponse(status_code=400, content={"error": "ids must be a non-empty list"})
+
+    try:
+        deleted_count = delete_playlists(ids)
+        return JSONResponse(content={"deleted": deleted_count})
+    except Exception as e:
+        print(f"[routes] /playlists DELETE error: {e}")
+        return JSONResponse(status_code=500, content={"error": str(e)})
 
 
 @router.get("/logout")

@@ -97,6 +97,48 @@
         <hr class="divider" />
 
         <!-- -----------------------------------------------------------------
+           SELECTION ACTION BAR
+           Fixed below header, appears when at least one card is selected.
+           Managed entirely by history.js.
+           ----------------------------------------------------------------- -->
+        <div
+          class="selection-bar"
+          id="selection-bar"
+          role="toolbar"
+          aria-label="Actions sur la sélection"
+          aria-live="polite"
+        >
+          <p class="selection-bar__count">
+            <strong id="selection-count">0</strong>
+            <span id="selection-label"> playlist sélectionnée</span>
+          </p>
+          <div class="selection-bar__actions">
+            <button
+              type="button"
+              class="btn btn--ghost"
+              id="btn-deselect-all"
+              aria-label="Désélectionner tout"
+            >
+              Tout désélectionner
+            </button>
+            <button
+              type="button"
+              class="btn btn--danger"
+              id="btn-delete-selected"
+              aria-label="Supprimer les playlists sélectionnées"
+            >
+              <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6M14 11v6"/>
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+              Supprimer
+            </button>
+          </div>
+        </div>
+
+        <!-- -----------------------------------------------------------------
            PLAYLIST GRID
            Rendered from Jinja2 loop over DuckDB playlists
            ----------------------------------------------------------------- -->
@@ -109,7 +151,16 @@
               class="history-card"
               role="article"
               aria-labelledby="card-title-{{ playlist.id }}"
+              data-id="{{ playlist.id }}"
             >
+              <!-- Selection checkbox -->
+              <input
+                type="checkbox"
+                class="history-card__checkbox"
+                aria-label="Sélectionner {{ playlist.title | e }}"
+                data-id="{{ playlist.id }}"
+              />
+
               <!-- Date -->
               <time
                 class="history-card__date"
@@ -158,9 +209,9 @@
                   </a>
                   {% endif %}
 
-                  <!-- Reuse this prompt -->
+                  <!-- Reuse this prompt — passes playlist_id to load previous tracks -->
                   <a
-                    href="/?prompt={{ playlist.user_prompt | urlencode }}"
+                    href="/?prompt={{ playlist.user_prompt | urlencode }}&playlist_id={{ playlist.id }}"
                     class="btn btn--ghost"
                     style="padding: 0.3rem 0.8rem; font-size: 0.75rem"
                     aria-label="Réutiliser le prompt de {{ playlist.title }}"
@@ -214,6 +265,47 @@
       </div>
     </footer>
 
+    <!-- Confirmation modal for playlist deletion -->
+    <div
+      class="modal-backdrop"
+      id="delete-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      aria-describedby="modal-body"
+    >
+      <div class="modal">
+        <h2 class="modal__title" id="modal-title">Supprimer les playlists ?</h2>
+        <div class="modal__body" id="modal-body">
+          <p>
+            Tu es sur le point de supprimer
+            <strong id="modal-count"></strong>.
+          </p>
+          <p class="modal__note">
+            Cette action supprime uniquement l’historique local (DuckDB).
+            Les playlists restent dans ton compte Spotify.
+          </p>
+        </div>
+        <div class="modal__actions">
+          <button
+            type="button"
+            class="btn btn--ghost"
+            id="btn-modal-cancel"
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            class="btn btn--danger"
+            id="btn-modal-confirm"
+          >
+            Supprimer définitivement
+          </button>
+        </div>
+      </div>
+    </div>
+
     <script src="/static/js/app.js"></script>
+    <script src="/static/js/history.js"></script>
   </body>
 </html>

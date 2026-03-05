@@ -1012,6 +1012,163 @@ label {
 }
 
 /* --------------------------------------------------------------------------
+   16b. History card — selection mode
+   -------------------------------------------------------------------------- */
+
+/* Checkbox — hidden by default, visible on hover or when card is selected */
+.history-card__checkbox {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  width: 20px;
+  height: 20px;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  /* Scale up slightly for easier clicking */
+  transform: scale(1.1);
+}
+
+/* Make the card position:relative so the checkbox can be positioned inside */
+.history-card {
+  position: relative;
+}
+
+.history-card:hover .history-card__checkbox,
+.history-card.is-selected .history-card__checkbox {
+  opacity: 1;
+}
+
+/* Selected state — green border, subtle glow */
+.history-card.is-selected {
+  border-color: var(--color-accent);
+  background: rgba(29, 185, 84, 0.04);
+  box-shadow: 0 0 0 1px var(--color-accent);
+}
+
+/* Selection action bar — fixed at top, below site header */
+.selection-bar {
+  position: fixed;
+  top: 73px; /* just below the sticky site-header */
+  left: 0;
+  right: 0;
+  z-index: 150;
+  background: var(--color-bg-overlay);
+  border-bottom: 1px solid var(--color-accent);
+  padding: var(--space-3) var(--space-5);
+
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.selection-bar.is-visible {
+  display: flex;
+  animation: slideDown var(--transition-base) ease forwards;
+}
+
+.selection-bar__count {
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.selection-bar__count strong {
+  color: var(--color-accent);
+}
+
+.selection-bar__actions {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+/* Danger variant — red delete button */
+.btn--danger {
+  background: transparent;
+  border: 1px solid var(--color-error);
+  color: var(--color-error);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background: rgba(224, 82, 96, 0.1);
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
+/* Confirmation modal */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: rgba(0, 0, 0, 0.75);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.modal-backdrop.is-visible {
+  display: flex;
+  animation: fadeIn var(--transition-base) ease forwards;
+}
+
+.modal {
+  background: var(--color-bg-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  max-width: 420px;
+  width: 100%;
+  box-shadow: var(--shadow-md);
+  animation: slideUp var(--transition-base) ease forwards;
+}
+
+.modal__title {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  margin-bottom: var(--space-3);
+}
+
+.modal__body {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-6);
+}
+
+.modal__body strong {
+  color: var(--color-text);
+}
+
+.modal__note {
+  font-size: 0.8rem;
+  color: var(--color-text-faint);
+  font-family: var(--font-body);
+  margin-top: var(--space-3);
+}
+
+.modal__actions {
+  display: flex;
+  gap: var(--space-3);
+  justify-content: flex-end;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* --------------------------------------------------------------------------
    17. Empty States
    -------------------------------------------------------------------------- */
 

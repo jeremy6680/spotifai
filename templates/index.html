@@ -306,6 +306,89 @@
         <!-- /.generator-card -->
 
         <!-- -----------------------------------------------------------------
+           PREVIOUS TRACKS SECTION
+           Shown when arriving from /history via "Relancer" with a playlist_id.
+           Displays the track list that was generated with this prompt before.
+           Hidden if no prefill_tracks (default page load).
+           ----------------------------------------------------------------- -->
+        {% if prefill_tracks %}
+        <section
+          class="results-section is-visible"
+          id="prefill-results-section"
+          aria-labelledby="prefill-results-title"
+        >
+          <div class="results-header">
+            <div>
+              <h2 id="prefill-results-title">{{ prefill_title | e }}</h2>
+              <p class="results-header__meta">
+                {{ prefill_tracks | length }} tracks &middot; génération précédente
+              </p>
+            </div>
+          </div>
+
+          <ol class="track-list" aria-label="Tracks de la playlist précédente">
+            {% for track in prefill_tracks %}
+            <li class="track-item" role="listitem">
+
+              <div class="track-item__index" aria-hidden="true">
+                <span class="track-num text-faint text-mono">{{ loop.index }}</span>
+              </div>
+
+              {% if track.image_url %}
+              <img
+                class="track-item__art"
+                src="{{ track.image_url | e }}"
+                alt="Pochette de {{ track.name | e }}"
+                width="48"
+                height="48"
+                loading="lazy"
+              />
+              {% else %}
+              <div class="track-item__art track-item__art--placeholder" aria-hidden="true">♪</div>
+              {% endif %}
+
+              <div class="track-item__info">
+                <span class="track-item__name">{{ track.name | e }}</span>
+                <span class="track-item__artist">
+                  {% if track.artists is iterable and track.artists is not string %}
+                    {{ track.artists | join(' · ') }}
+                  {% else %}
+                    {{ track.artists | e }}
+                  {% endif %}
+                </span>
+              </div>
+
+              <div class="track-item__meta">
+                <span class="track-item__duration text-faint text-mono">
+                  {%- set total_sec = (track.duration_ms / 1000) | int -%}
+                  {%- set min = (total_sec / 60) | int -%}
+                  {%- set sec = total_sec % 60 -%}
+                  {{ min }}:{{ '%02d' | format(sec) }}
+                </span>
+                {% if track.external_url %}
+                <a
+                  href="{{ track.external_url | e }}"
+                  class="track-item__link"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Ouvrir {{ track.name | e }} dans Spotify"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </a>
+                {% endif %}
+              </div>
+
+            </li>
+            {% endfor %}
+          </ol>
+        </section>
+        {% endif %}
+
+        <!-- -----------------------------------------------------------------
            GENERATION STATUS
            Shown while the API call is in progress
            ----------------------------------------------------------------- -->

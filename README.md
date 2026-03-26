@@ -8,7 +8,7 @@
 
 ## 🎙️ Live Demo
 
-**[spotifai.lumafinch.com](https://spotifai.lumafinch.com)**
+**[spotifai.web2data.org](https://spotifai.web2data.org)**
 
 > SpotifAI is currently in **Spotify Development mode**, which limits access to 25 whitelisted users.
 > To try the demo, send your Spotify account email to [hey@jeremymarchandeau.com](mailto:hey@jeremymarchandeau.com) and I’ll add you.

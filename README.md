@@ -231,6 +231,6 @@ See `Dockerfile` and `docker-compose.yml` at the project root.
 
 ## Author
 
-Jeremy Marchandeau — [web2data.jeremymarchandeau.com](https://web2data.jeremymarchandeau.com)
+Jeremy Marchandeau — [web2data.org](https://web2data.org)
 
-This project is part of a web developer → data/AI engineering transition. See the [blog series](https://web2data.jeremymarchandeau.com) for articles covering the technical choices made here.
+This project is part of a web developer → data/AI engineering transition. See the [blog series](https://web2data.org) for articles covering the technical choices made here.
